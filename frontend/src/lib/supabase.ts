@@ -253,16 +253,16 @@ class MockSupabaseClient {
   from(table: string) {
     return {
       select: () => this.createBuilder(table),
-      update: (data: any) => this.createBuilder(table, 'update', data),
-      insert: (data: any) => this.createBuilder(table, 'insert', data),
-      upsert: (data: any) => this.createBuilder(table, 'upsert', data),
-      delete: () => this.createBuilder(table, 'delete'),
+      update: (_data: unknown) => this.createBuilder(table),
+      insert: (_data: unknown) => this.createBuilder(table),
+      upsert: (_data: unknown) => this.createBuilder(table),
+      delete: () => this.createBuilder(table),
     }
   }
 
-  channel(name: string) {
+  channel(_name: string) {
     const mockChannel = {
-      on: (event: any, filter: any, callback: any) => {
+      on: (_event: unknown, _filter: unknown, _callback: unknown) => {
         return mockChannel
       },
       subscribe: (callback?: (status: string, err?: Error) => void) => {
@@ -274,7 +274,7 @@ class MockSupabaseClient {
     return mockChannel
   }
 
-  private createBuilder(table: string, op?: string, data?: any) {
+  private createBuilder(table: string) {
     const builder = {
       eq: () => builder,
       order: () => builder,

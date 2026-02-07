@@ -14,14 +14,14 @@ export default function Dashboard() {
     // Subscribe to realtime updates
     const alertsChannel = supabase
       .channel('alerts-channel')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alerts' }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alerts' }, (payload: { new: Alert }) => {
         setAlerts((prev) => [payload.new as Alert, ...prev])
       })
       .subscribe()
 
     const drugsChannel = supabase
       .channel('drugs-channel')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'drugs' }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'drugs' }, (payload: { new: Drug }) => {
         setDrugs((prev) => prev.map((d) => (d.id === payload.new.id ? (payload.new as Drug) : d)))
       })
       .subscribe()
