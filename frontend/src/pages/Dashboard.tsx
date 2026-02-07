@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { AlertTriangle, ShieldAlert, TrendingDown, Package } from 'lucide-react'
 import { supabase, Alert, Drug, Shortage, formatNumber, getBurnRateColor } from '../lib/supabase'
 import { SummaryCard } from '../components/SummaryCard'
-import { AlertCard } from '../components/AlertCard'
-import { ShortageCard } from '../components/ShortageCard'
+import { ActionCard, ActionCardData, createActionCardData, getSeverityWeight } from '../components/ActionCard'
 
 export default function Dashboard() {
   const [alerts, setAlerts] = useState<Alert[]>([])
@@ -120,17 +119,44 @@ export default function Dashboard() {
     }
   }
 
-  async function handleReorder(alert: Alert) {
-    console.log("Initiating reorder for", alert.drug_name);
-    // Logic to trigger reorder would go here
-    handleAcknowledge(alert.id);
+  // Handler for ActionCard unified action
+  function handleCardAction(data: ActionCardData) {
+    if (data.originalShortage) {
+      if (data.actionType === 'order' && data.originalAlert) {
+        console.log("Initiating reorder for", data.drugName);
+        handleAcknowledge(data.originalAlert.id);
+      } else if (data.actionType === 'supplier' && data.originalAlert) {
+        console.log("Initiating supplier swap for", data.drugName);
+        handleAcknowledge(data.originalAlert.id);
+      } else {
+        handleResolveShortage(data.originalShortage.id);
+      }
+    } else if (data.originalAlert) {
+      if (data.actionType === 'order') {
+        console.log("Initiating reorder for", data.drugName);
+      } else if (data.actionType === 'supplier') {
+        console.log("Initiating supplier swap for", data.drugName);
+      }
+      handleAcknowledge(data.originalAlert.id);
+    }
   }
 
-  async function handleSwapSuppliers(alert: Alert) {
-    console.log("Initiating supplier swap for", alert.drug_name);
-    // Logic to swap supplier would go here
-    handleAcknowledge(alert.id);
-  }
+  // Build action cards data from alerts only (ignore shortages for actions as per request)
+  const actionCardsData = useMemo(() => {
+    return alerts
+      .filter(a => !a.acknowledged && a.action_required === true)
+      .map(alert => createActionCardData(undefined, alert))
+      .filter((card): card is ActionCardData => card !== null)
+      .sort((a, b) => getSeverityWeight(b.severity) - getSeverityWeight(a.severity));
+  }, [alerts]);
+
+  // System alerts (non-actionable)
+  const systemAlertsData = useMemo(() => {
+    return alerts.filter(a =>
+      !a.acknowledged &&
+      !a.action_required // Capture false or undefined
+    ).map(alert => createActionCardData(undefined, alert)).filter(Boolean) as ActionCardData[];
+  }, [alerts]);
 
   const criticalAlerts = alerts.filter((a) => a.severity === 'CRITICAL' && !a.acknowledged).length
   const urgentAlerts = alerts.filter((a) => a.severity === 'URGENT' && !a.acknowledged).length
@@ -155,52 +181,53 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 gap-6">
         {/* Detected Shortages Section with Embedded Recommendations */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-gray-700 flex items-center gap-2">
-            <AlertTriangle className="text-red-500" />
-            Detected Shortages & Recommendations
-          </h2>
-          {shortages.length === 0 && alerts.filter(a => !a.acknowledged).length === 0 ? (
-            <div className="text-center bg-white p-8 rounded-lg shadow-sm border border-gray-100">
-              <p className="text-gray-500">No active shortages or pending recommendations.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {shortages.map((shortage) => {
-                // Find matching alert for this shortage
-                const relatedAlert = alerts.find(a =>
-                  !a.acknowledged &&
-                  a.drug_name === shortage.drug_name &&
-                  (a.alert_type === 'RESTOCK_NOW' || a.alert_type === 'SUBSTITUTE_RECOMMENDED')
-                );
-
-                return (
-                  <ShortageCard
-                    key={shortage.id}
-                    shortage={shortage}
-                    relatedAlert={relatedAlert}
-                    onResolve={handleResolveShortage}
-                    onReorder={handleReorder}
-                    onSwapSuppliers={handleSwapSuppliers}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Actions Needed Section */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-gray-700 flex items-center gap-2">
+              <ShieldAlert className="text-blue-600" />
+              Actions Needed
+            </h2>
+            {actionCardsData.length === 0 ? (
+              <div className="text-center bg-white p-8 rounded-lg shadow-sm border border-gray-100">
+                <p className="text-gray-500">No pending actions.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {actionCardsData.map((cardData) => (
+                  <ActionCard
+                    key={cardData.id}
+                    data={cardData}
+                    onAction={handleCardAction}
                   />
-                );
-              })}
+                ))}
+              </div>
+            )}
+          </div>
 
-              {/* Orphan Alerts: Alerts that don't match a specific shortage record but still need attention */}
-              {alerts.filter(a =>
-                !a.acknowledged &&
-                !shortages.some(s => s.drug_name === a.drug_name)
-              ).map(alert => (
-                <AlertCard
-                  key={alert.id}
-                  alert={alert}
-                  onAcknowledge={handleAcknowledge}
-                  onReorder={handleReorder}
-                  onSwapSuppliers={handleSwapSuppliers}
-                />
-              ))}
-            </div>
-          )}
+          {/* System Alerts Section */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-gray-700 flex items-center gap-2">
+              <AlertTriangle className="text-orange-500" />
+              System Alerts
+            </h2>
+            {systemAlertsData.length === 0 ? (
+              <div className="text-center bg-white p-8 rounded-lg shadow-sm border border-gray-100">
+                <p className="text-gray-500">No system alerts.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {systemAlertsData.map((cardData) => (
+                  <ActionCard
+                    key={cardData.id}
+                    data={cardData}
+                    onAction={handleCardAction}
+                    variant="system"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

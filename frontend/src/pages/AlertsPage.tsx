@@ -3,14 +3,14 @@ import { supabase, Alert, formatDate, getSeverityColor } from '../lib/supabase';
 import { Button } from '../components/ui/button';
 
 const SEVERITY_LEVELS: Alert['severity'][] = ['CRITICAL', 'URGENT', 'WARNING', 'INFO'];
-const ALERT_TYPES: Alert['alert_type'][] = ['RESTOCK_NOW', 'SHORTAGE_WARNING', 'SUBSTITUTE_RECOMMENDED', 'SCHEDULE_CHANGE', 'SUPPLY_CHAIN_RISK', 'AUTO_ORDER_PLACED'];
+const ALERT_TYPES: Alert['alert_type'][] = ['RESTOCK_NOW', 'SHORTAGE_WARNING', 'SUBSTITUTE_RECOMMENDED', 'SCHEDULE_CHANGE', 'SUPPLY_CHAIN_RISK'];
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Filter states
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'acknowledged'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'active' | 'acknowledged' | 'orders' | 'supplier'>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
 
@@ -27,12 +27,17 @@ export default function AlertsPage() {
 
   const filteredAlerts = useMemo(() => {
     return alerts.filter(alert => {
-      const statusMatch = statusFilter === 'all' || (statusFilter === 'active' && !alert.acknowledged) || (statusFilter === 'acknowledged' && alert.acknowledged);
+      let categoryMatch = true;
+      if (categoryFilter === 'active') categoryMatch = !alert.acknowledged;
+      else if (categoryFilter === 'acknowledged') categoryMatch = alert.acknowledged;
+      else if (categoryFilter === 'orders') categoryMatch = ['RESTOCK_NOW'].includes(alert.alert_type);
+      else if (categoryFilter === 'supplier') categoryMatch = ['SUBSTITUTE_RECOMMENDED', 'SUPPLY_CHAIN_RISK', 'PRICE_HIKE', 'DELAY_ANTICIPATED'].includes(alert.alert_type);
+
       const severityMatch = severityFilter === 'all' || alert.severity === severityFilter;
       const typeMatch = typeFilter === 'all' || alert.alert_type === typeFilter;
-      return statusMatch && severityMatch && typeMatch;
+      return categoryMatch && severityMatch && typeMatch;
     });
-  }, [alerts, statusFilter, severityFilter, typeFilter]);
+  }, [alerts, categoryFilter, severityFilter, typeFilter]);
 
   if (loading) {
     return <div className="text-center py-12">Loading alert history...</div>;
@@ -43,12 +48,12 @@ export default function AlertsPage() {
       <div className="space-y-4">
         <h1 className="text-3xl font-bold text-gray-800">Alert History</h1>
         <div className="p-4 bg-white rounded-lg shadow-sm flex flex-col md:flex-row gap-4 items-center">
-          {/* Status Filter */}
+          {/* Category Filter */}
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-600">Status:</span>
+            <span className="text-sm font-medium text-gray-600">View:</span>
             <div className="flex items-center rounded-lg border p-0.5">
-              {(['all', 'active', 'acknowledged'] as const).map(f => (
-                <Button key={f} size="sm" variant={statusFilter === f ? 'default' : 'ghost'} onClick={() => setStatusFilter(f)} className="capitalize">{f}</Button>
+              {(['all', 'active', 'acknowledged', 'orders', 'supplier'] as const).map(f => (
+                <Button key={f} size="sm" variant={categoryFilter === f ? 'default' : 'ghost'} onClick={() => setCategoryFilter(f)} className="capitalize">{f}</Button>
               ))}
             </div>
           </div>

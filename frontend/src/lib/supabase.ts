@@ -22,6 +22,9 @@ export interface Alert {
   alert_type: 'RESTOCK_NOW' | 'SHORTAGE_WARNING' | 'SUBSTITUTE_RECOMMENDED' | 'SCHEDULE_CHANGE' | 'SUPPLY_CHAIN_RISK' | 'AUTO_ORDER_PLACED'
   drug_name: string
   acknowledged: boolean
+  source?: string
+  source_url?: string
+  action_required?: boolean
 }
 
 export interface Drug {
@@ -53,6 +56,7 @@ export interface Shortage {
   impact_severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
   description?: string
   source?: string
+  source_url?: string
   type?: string
 }
 
