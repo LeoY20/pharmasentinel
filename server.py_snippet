@@ -1,0 +1,23 @@
+
+from fastapi import BackgroundTasks
+import uuid
+
+@app.post("/api/run-pipeline")
+async def manual_run_pipeline(background_tasks: BackgroundTasks):
+    """
+    Triggers the main pipeline manually.
+    """
+    run_id = str(uuid.uuid4())
+    
+    def task():
+        print(f"--- Manual Trigger: Pipeline Run (RunID: {run_id}) ---")
+        run_pipeline()
+        print("--- Manual Pipeline Run Finished ---")
+
+    background_tasks.add_task(task)
+    
+    return {
+        "status": "success", 
+        "message": "Pipeline run triggered successfully",
+        "data": {"run_id": run_id}
+    }

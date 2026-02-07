@@ -61,6 +61,29 @@ class TriggerResponse(BaseModel):
     message: str
     data: dict = {}
 
+@app.post("/api/run-pipeline", response_model=TriggerResponse)
+async def manual_run_pipeline(background_tasks: BackgroundTasks):
+    """
+    Triggers the main pipeline manually.
+    """
+    run_id = str(uuid.uuid4())
+    
+    def task():
+        print(f"--- Manual Trigger: Pipeline Run (RunID: {run_id}) ---")
+        try:
+           run_pipeline()
+        except Exception as e:
+           print(f"Manual Pipeline Run Error: {e}")
+        print("--- Manual Pipeline Run Finished ---")
+
+    background_tasks.add_task(task)
+    
+    return {
+        "status": "success", 
+        "message": "Pipeline run triggered successfully",
+        "data": {"run_id": run_id}
+    }
+
 @app.post("/api/analyze-order/{order_id}", response_model=TriggerResponse)
 async def analyze_order(order_id: str, background_tasks: BackgroundTasks):
     """
