@@ -95,10 +95,16 @@ def upsert_substitutes(analysis: dict, inventory: list):
     for sub_info in analysis.get("substitutions", []):
         original_name = sub_info.get("original_drug")
         original_id = inventory_by_name.get(original_name, {}).get("id")
+        if not original_id:
+            print(f"  Skipping substitutes for unknown drug: {original_name}")
+            continue
 
         for sub in sub_info.get("substitutes", []):
             sub_name = sub.get("name")
             sub_id = inventory_by_name.get(sub_name, {}).get("id")
+            if not sub_id:
+                print(f"  Skipping substitute not in inventory: {sub_name}")
+                continue
             records_to_upsert.append(
                 {
                     "drug_id": original_id,
