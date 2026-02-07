@@ -1,4 +1,4 @@
-# PharmaSentinel 🏥💊
+# PharmaSentinel
 
 **Hospital Pharmacy Supply Chain Intelligence Platform**
 
@@ -6,7 +6,7 @@ A multi-agent AI system that predicts drug shortages, recommends substitutes, op
 
 ---
 
-## 🎯 What It Does
+## Overview
 
 PharmaSentinel monitors 10 critical hospital drugs (ranked by criticality 1-10) and uses AI agents to:
 
@@ -32,7 +32,7 @@ PharmaSentinel monitors 10 critical hospital drugs (ranked by criticality 1-10) 
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -66,7 +66,7 @@ PharmaSentinel monitors 10 critical hospital drugs (ranked by criticality 1-10) 
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -74,7 +74,7 @@ PharmaSentinel monitors 10 critical hospital drugs (ranked by criticality 1-10) 
 - **Node.js 18+** and npm
 - **Supabase account** ([supabase.com](https://supabase.com))
 - **API Keys**:
-  - 3× Dedalus LLM API keys
+  - 3 Dedalus LLM API keys
   - NewsAPI key ([newsapi.org](https://newsapi.org))
 
 ### 1. Clone and Setup
@@ -164,7 +164,7 @@ Open [http://localhost:5173](http://localhost:5173)
 
 ---
 
-## 📊 Dashboard Features
+## Dashboard Features
 
 ### Summary Cards
 
@@ -188,10 +188,10 @@ Real-time alerts with:
 - Daily usage rate
 - Burn rate (days until stockout)
 - Color-coded risk indicators:
-  - 🔴 Red: < 7 days
-  - 🟠 Orange: 7-14 days
-  - 🟡 Yellow: 14-30 days
-  - 🟢 Green: 30+ days
+  - Red: < 7 days
+  - Orange: 7-14 days
+  - Yellow: 14-30 days
+  - Green: 30+ days
 
 ### Realtime Updates
 
@@ -200,7 +200,7 @@ Real-time alerts with:
 
 ---
 
-## 🔧 Project Structure
+## Project Structure
 
 ```
 pharmasentinel/
@@ -237,7 +237,7 @@ pharmasentinel/
 
 ---
 
-## 🧠 Agent Details
+## Agent Details
 
 ### API Key Distribution
 
@@ -273,7 +273,7 @@ Agent 3 uses medically validated substitution mappings:
 - **Heparin** → Enoxaparin, Fondaparinux, Warfarin
 - **Morphine** → Hydromorphone, Fentanyl, Oxycodone
 - **IV Fluids** → Lactated Ringer's, Normal Saline, D5W
-- **Oxygen** → ⚠️ NO SUBSTITUTE (equipment/supply resolution required)
+- **Oxygen** → NO SUBSTITUTE (equipment/supply resolution required)
 
 ### Major Suppliers (Agent 4)
 
@@ -285,7 +285,7 @@ Hard-coded list includes:
 
 ---
 
-## 📈 Usage Examples
+## Usage Examples
 
 ### Run Pipeline Once
 
@@ -321,17 +321,17 @@ PHASE 1: Data Collection (Parallel)
 ============================================================
 Agent 0: Inventory Analyzer
 ...
-✓ Agent 0 completed successfully
+* Agent 0 completed successfully
 
 ============================================================
 Agent 1: FDA Drug Shortage Monitor
 ...
-✓ Agent 1 completed successfully
+* Agent 1 completed successfully
 
 ============================================================
 Agent 2: News & Supply Chain Analyzer
 ...
-✓ Agent 2 completed successfully
+* Agent 2 completed successfully
 
 ================================================================================
 PHASE 1 COMPLETED in 12.45s
@@ -342,7 +342,7 @@ PHASE 1 COMPLETED in 12.45s
 
 ---
 
-## 🔐 Security Notes
+## Security Notes
 
 - **RLS Policies**: Currently permissive for hackathon. In production, scope to `hospital_id`.
 - **API Keys**: Never commit `.env` files. Use environment-specific secrets management.
@@ -350,7 +350,7 @@ PHASE 1 COMPLETED in 12.45s
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### "Missing environment variables"
 
@@ -382,13 +382,13 @@ PHASE 1 COMPLETED in 12.45s
 
 ---
 
-## 📝 License
+## License
 
 This is a hackathon/educational project. No license specified.
 
 ---
 
-## 🙏 Credits
+## Credits
 
 Built for the **Insolvent Hackathon** using:
 - **Supabase** for database + realtime
@@ -400,11 +400,8 @@ Built for the **Insolvent Hackathon** using:
 
 ---
 
-## 📧 Support
+## Support
 
-For questions or issues, please check:
-1. This README
-2. The implementation spec at `project_instructions.md`
-3. Agent logs for detailed error messages
+For issues, please refer to the agent logs or open an issue on the repository.
 
 ---
