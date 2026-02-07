@@ -52,6 +52,7 @@ function Navigation() {
 }
 
 function App() {
+  console.log('App component rendering');
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-gray-50">
