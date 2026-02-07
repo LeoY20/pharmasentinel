@@ -78,16 +78,16 @@ else:
 # ============================================================================
 
 MONITORED_DRUGS: List[Dict[str, Any]] = [
-    {"rank": 1, "name": "Epinephrine (Adrenaline)", "type": "Anaphylaxis / Cardiac Arrest"},
+    {"rank": 1, "name": "Epinephrine", "type": "Anaphylaxis/Cardiac"},
     {"rank": 2, "name": "Oxygen", "type": "Respiratory Support"},
     {"rank": 3, "name": "Levofloxacin", "type": "Broad-Spectrum Antibiotic"},
     {"rank": 4, "name": "Propofol", "type": "Anesthetic"},
     {"rank": 5, "name": "Penicillin", "type": "Antibiotic"},
-    {"rank": 6, "name": "IV Fluids", "type": "Hydration / Shock / Blood Loss"},
-    {"rank": 7, "name": "Heparin / Warfarin", "type": "Anticoagulant"},
-    {"rank": 8, "name": "Insulin", "type": "Diabetes / DKA Management"},
-    {"rank": 9, "name": "Morphine", "type": "Analgesic / Pain Management"},
-    {"rank": 10, "name": "Vaccines (e.g., Smallpox, Polio)", "type": "Immunization"},
+    {"rank": 6, "name": "IV Fluids", "type": "Hydration/Shock"},
+    {"rank": 7, "name": "Heparin", "type": "Anticoagulant"},
+    {"rank": 8, "name": "Insulin", "type": "Diabetes Management"},
+    {"rank": 9, "name": "Morphine", "type": "Analgesic/Pain"},
+    {"rank": 10, "name": "Vaccines", "type": "Immunization"},
 ]
 
 MONITORED_DRUG_NAMES: List[str] = [drug["name"] for drug in MONITORED_DRUGS]
