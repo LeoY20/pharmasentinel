@@ -45,7 +45,7 @@ export default function DrugsPage() {
         shortages: shortages.filter((s: Shortage) => {
           const drugKey = normalizeName(drug.name)
           const shortageKey = normalizeName(s.drug_name)
-          return drugKey !== '' && drugKey === shortageKey
+          return drugKey !== '' && shortageKey !== '' && (shortageKey.includes(drugKey) || drugKey.includes(shortageKey))
         }),
         suppliers: suppliers.filter((s: Supplier) => s.drug_name === drug.name)
       }))

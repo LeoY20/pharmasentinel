@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { AlertTriangle, ShieldAlert, TrendingDown, Package } from 'lucide-react'
+import { AlertTriangle, ShieldAlert, TrendingDown, Package, Check, X, Pencil } from 'lucide-react'
 import { supabase, Alert, Drug, Shortage, formatNumber, getBurnRateColor } from '../lib/supabase'
 import { SummaryCard } from '../components/SummaryCard'
 import { ActionCard, ActionCardData, createActionCardData, getSeverityWeight } from '../components/ActionCard'
@@ -10,7 +10,11 @@ export default function Dashboard() {
   const [shortages, setShortages] = useState<Shortage[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Severity weights for sorting
+  // Inline editing state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState<string>('')
+
+  // ... (severityWeight and impactWeight objects remain same)
   const severityWeight = {
     CRITICAL: 4,
     URGENT: 3,
@@ -18,7 +22,6 @@ export default function Dashboard() {
     INFO: 1,
   }
 
-  // Impact weights for shortages
   const impactWeight = {
     CRITICAL: 4,
     HIGH: 3,
@@ -30,7 +33,6 @@ export default function Dashboard() {
     return [...alertsList].sort((a, b) => {
       const weightA = severityWeight[a.severity] || 0
       const weightB = severityWeight[b.severity] || 0
-      // Sort by severity (descending), then by date (descending)
       if (weightA !== weightB) return weightB - weightA
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
@@ -97,21 +99,16 @@ export default function Dashboard() {
   }
 
   async function handleAcknowledge(alertId: string) {
-    // Optimistically update UI
     setAlerts((prev) => prev.filter((a) => a.id !== alertId))
-
     const { error } = await supabase.from('alerts').update({ acknowledged: true }).eq('id', alertId)
     if (error) {
       console.error("Failed to acknowledge alert:", error)
-      // Revert UI if update fails
       fetchData()
     }
   }
 
   async function handleResolveShortage(shortageId: string) {
-    // Optimistically update UI
     setShortages((prev) => prev.filter((s) => s.id !== shortageId))
-
     const { error } = await supabase.from('shortages').update({ resolved: true }).eq('id', shortageId)
     if (error) {
       console.error("Failed to resolve shortage:", error)
@@ -119,29 +116,36 @@ export default function Dashboard() {
     }
   }
 
-  // Handler for ActionCard unified action
+  async function handleUpdateStock(drugId: string) {
+    const newVal = parseInt(editValue, 10)
+    if (isNaN(newVal) || newVal < 0) return
+
+    // Optimistic update
+    setDrugs(prev => prev.map(d => d.id === drugId ? { ...d, stock_quantity: newVal } : d))
+    setEditingId(null)
+
+    const { error } = await supabase.from('drugs').update({ stock_quantity: newVal }).eq('id', drugId)
+    if (error) {
+      console.error("Failed to update stock:", error)
+      fetchData() // Revert
+    }
+  }
+
   function handleCardAction(data: ActionCardData) {
     if (data.originalShortage) {
+      // ... (existing action handling logic)
       if (data.actionType === 'order' && data.originalAlert) {
-        console.log("Initiating reorder for", data.drugName);
         handleAcknowledge(data.originalAlert.id);
       } else if (data.actionType === 'supplier' && data.originalAlert) {
-        console.log("Initiating supplier swap for", data.drugName);
         handleAcknowledge(data.originalAlert.id);
       } else {
         handleResolveShortage(data.originalShortage.id);
       }
     } else if (data.originalAlert) {
-      if (data.actionType === 'order') {
-        console.log("Initiating reorder for", data.drugName);
-      } else if (data.actionType === 'supplier') {
-        console.log("Initiating supplier swap for", data.drugName);
-      }
       handleAcknowledge(data.originalAlert.id);
     }
   }
 
-  // Build action cards data from alerts only (ignore shortages for actions as per request)
   const actionCardsData = useMemo(() => {
     return alerts
       .filter(a => !a.acknowledged && a.action_required === true)
@@ -150,11 +154,10 @@ export default function Dashboard() {
       .sort((a, b) => getSeverityWeight(b.severity) - getSeverityWeight(a.severity));
   }, [alerts]);
 
-  // System alerts (non-actionable)
   const systemAlertsData = useMemo(() => {
     return alerts.filter(a =>
       !a.acknowledged &&
-      !a.action_required // Capture false or undefined
+      !a.action_required
     ).map(alert => createActionCardData(undefined, alert)).filter(Boolean) as ActionCardData[];
   }, [alerts]);
 
@@ -171,7 +174,6 @@ export default function Dashboard() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <SummaryCard title="Critical Alerts" value={criticalAlerts} icon={<ShieldAlert size={24} />} colorClass="bg-red-500" />
         <SummaryCard title="Urgent Alerts" value={urgentAlerts} icon={<AlertTriangle size={24} />} colorClass="bg-orange-500" />
@@ -180,9 +182,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        {/* Detected Shortages Section with Embedded Recommendations */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Actions Needed Section */}
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-gray-700 flex items-center gap-2">
               <ShieldAlert className="text-blue-600" />
@@ -205,7 +205,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* System Alerts Section */}
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-gray-700 flex items-center gap-2">
               <AlertTriangle className="text-orange-500" />
@@ -231,7 +230,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Drug Inventory Table */}
       <div className="bg-white shadow-sm rounded-lg">
         <h2 className="text-xl font-semibold text-gray-700 p-4 border-b">Drug Inventory Status</h2>
         <div className="overflow-x-auto">
@@ -251,7 +249,31 @@ export default function Dashboard() {
                   <td className="px-4 py-3 text-sm text-center font-bold">{drug.criticality_rank}</td>
                   <td className="px-4 py-3 text-sm font-medium text-gray-800">{drug.name}</td>
                   <td className="px-4 py-3 text-sm text-right text-gray-600">
-                    {formatNumber(drug.stock_quantity)} {drug.unit}
+                    {editingId === drug.id ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <input
+                          type="number"
+                          className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleUpdateStock(drug.id);
+                            if (e.key === 'Escape') setEditingId(null);
+                          }}
+                        />
+                        <button onClick={() => handleUpdateStock(drug.id)} className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-50"><Check size={16} /></button>
+                        <button onClick={() => setEditingId(null)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50"><X size={16} /></button>
+                      </div>
+                    ) : (
+                      <div className="group flex items-center justify-end gap-2 cursor-pointer p-1 rounded hover:bg-gray-100 -mr-2 pr-2" onClick={() => {
+                        setEditingId(drug.id);
+                        setEditValue(drug.stock_quantity.toString());
+                      }}>
+                        <span>{formatNumber(drug.stock_quantity)} {drug.unit}</span>
+                        <Pencil size={14} className="text-gray-400 opacity-0 group-hover:opacity-100" />
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-right text-gray-600">{formatNumber(drug.usage_rate_daily)}</td>
                   <td className={`px-4 py-3 text-sm text-right font-semibold ${getBurnRateColor(drug.burn_rate_days)}`}>
