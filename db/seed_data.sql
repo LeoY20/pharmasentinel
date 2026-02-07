@@ -1,5 +1,7 @@
--- PharmaSentinel Seed Data
--- Run this after schema.sql to populate initial data
+-- ============================================================================
+-- PharmaSentinel Seed Data (FIXED)
+-- Run this AFTER schema.sql to populate initial data
+-- ============================================================================
 
 -- ============================================================================
 -- Seed: drugs table
@@ -23,114 +25,143 @@ ON CONFLICT DO NOTHING;
 -- ============================================================================
 -- Seed: suppliers table
 -- Major US pharmaceutical distributors + nearby hospitals
+-- drug_id resolved via subquery for full referential integrity
 -- ============================================================================
 
-INSERT INTO suppliers (name, drug_name, location, lead_time_days, price_per_unit, reliability_score, is_nearby_hospital, active)
+INSERT INTO suppliers (name, drug_name, drug_id, location, lead_time_days, price_per_unit, reliability_score, is_nearby_hospital, active)
 VALUES
-    -- National Distributors
-    ('McKesson Corporation', 'Epinephrine', 'National (US)', 1, 33.00, 0.98, FALSE, TRUE),
-    ('McKesson Corporation', 'Propofol', 'National (US)', 1, 43.00, 0.98, FALSE, TRUE),
-    ('McKesson Corporation', 'Levofloxacin', 'National (US)', 1, 11.50, 0.98, FALSE, TRUE),
-    ('McKesson Corporation', 'Penicillin', 'National (US)', 1, 7.50, 0.98, FALSE, TRUE),
-    ('McKesson Corporation', 'IV Fluids', 'National (US)', 1, 3.25, 0.98, FALSE, TRUE),
-    ('McKesson Corporation', 'Heparin', 'National (US)', 1, 27.00, 0.98, FALSE, TRUE),
-    ('McKesson Corporation', 'Insulin', 'National (US)', 1, 53.00, 0.98, FALSE, TRUE),
-    ('McKesson Corporation', 'Morphine', 'National (US)', 1, 17.00, 0.98, FALSE, TRUE),
+    -- McKesson Corporation
+    ('McKesson Corporation', 'Epinephrine',   (SELECT id FROM drugs WHERE name = 'Epinephrine'),   'National (US)', 1, 33.00, 0.98, FALSE, TRUE),
+    ('McKesson Corporation', 'Propofol',      (SELECT id FROM drugs WHERE name = 'Propofol'),      'National (US)', 1, 43.00, 0.98, FALSE, TRUE),
+    ('McKesson Corporation', 'Levofloxacin',  (SELECT id FROM drugs WHERE name = 'Levofloxacin'),  'National (US)', 1, 11.50, 0.98, FALSE, TRUE),
+    ('McKesson Corporation', 'Penicillin',    (SELECT id FROM drugs WHERE name = 'Penicillin'),    'National (US)', 1, 7.50,  0.98, FALSE, TRUE),
+    ('McKesson Corporation', 'IV Fluids',     (SELECT id FROM drugs WHERE name = 'IV Fluids'),     'National (US)', 1, 3.25,  0.98, FALSE, TRUE),
+    ('McKesson Corporation', 'Heparin',       (SELECT id FROM drugs WHERE name = 'Heparin'),       'National (US)', 1, 27.00, 0.98, FALSE, TRUE),
+    ('McKesson Corporation', 'Insulin',       (SELECT id FROM drugs WHERE name = 'Insulin'),       'National (US)', 1, 53.00, 0.98, FALSE, TRUE),
+    ('McKesson Corporation', 'Morphine',      (SELECT id FROM drugs WHERE name = 'Morphine'),      'National (US)', 1, 17.00, 0.98, FALSE, TRUE),
 
-    ('Cardinal Health', 'Epinephrine', 'National (US)', 1, 34.00, 0.97, FALSE, TRUE),
-    ('Cardinal Health', 'Propofol', 'National (US)', 1, 44.00, 0.97, FALSE, TRUE),
-    ('Cardinal Health', 'Oxygen', 'National (US)', 1, 0.48, 0.97, FALSE, TRUE),
-    ('Cardinal Health', 'Levofloxacin', 'National (US)', 1, 11.75, 0.97, FALSE, TRUE),
-    ('Cardinal Health', 'IV Fluids', 'National (US)', 1, 3.30, 0.97, FALSE, TRUE),
+    -- Cardinal Health
+    ('Cardinal Health', 'Epinephrine',   (SELECT id FROM drugs WHERE name = 'Epinephrine'),   'National (US)', 1, 34.00, 0.97, FALSE, TRUE),
+    ('Cardinal Health', 'Propofol',      (SELECT id FROM drugs WHERE name = 'Propofol'),      'National (US)', 1, 44.00, 0.97, FALSE, TRUE),
+    ('Cardinal Health', 'Oxygen',        (SELECT id FROM drugs WHERE name = 'Oxygen'),        'National (US)', 1, 0.48,  0.97, FALSE, TRUE),
+    ('Cardinal Health', 'Levofloxacin',  (SELECT id FROM drugs WHERE name = 'Levofloxacin'),  'National (US)', 1, 11.75, 0.97, FALSE, TRUE),
+    ('Cardinal Health', 'IV Fluids',     (SELECT id FROM drugs WHERE name = 'IV Fluids'),     'National (US)', 1, 3.30,  0.97, FALSE, TRUE),
 
-    ('AmerisourceBergen', 'Penicillin', 'National (US)', 1, 7.75, 0.96, FALSE, TRUE),
-    ('AmerisourceBergen', 'Heparin', 'National (US)', 1, 27.50, 0.96, FALSE, TRUE),
-    ('AmerisourceBergen', 'Insulin', 'National (US)', 1, 54.00, 0.96, FALSE, TRUE),
-    ('AmerisourceBergen', 'Morphine', 'National (US)', 1, 17.50, 0.96, FALSE, TRUE),
-    ('AmerisourceBergen', 'Vaccines', 'National (US)', 1, 21.50, 0.96, FALSE, TRUE),
+    -- AmerisourceBergen
+    ('AmerisourceBergen', 'Penicillin', (SELECT id FROM drugs WHERE name = 'Penicillin'), 'National (US)', 1, 7.75,  0.96, FALSE, TRUE),
+    ('AmerisourceBergen', 'Heparin',    (SELECT id FROM drugs WHERE name = 'Heparin'),    'National (US)', 1, 27.50, 0.96, FALSE, TRUE),
+    ('AmerisourceBergen', 'Insulin',    (SELECT id FROM drugs WHERE name = 'Insulin'),    'National (US)', 1, 54.00, 0.96, FALSE, TRUE),
+    ('AmerisourceBergen', 'Morphine',   (SELECT id FROM drugs WHERE name = 'Morphine'),   'National (US)', 1, 17.50, 0.96, FALSE, TRUE),
+    ('AmerisourceBergen', 'Vaccines',   (SELECT id FROM drugs WHERE name = 'Vaccines'),   'National (US)', 1, 21.50, 0.96, FALSE, TRUE),
 
-    -- Regional Distributors
-    ('Morris & Dickson', 'Epinephrine', 'Southeast US', 2, 34.50, 0.95, FALSE, TRUE),
-    ('Morris & Dickson', 'Propofol', 'Southeast US', 2, 44.50, 0.95, FALSE, TRUE),
-    ('Morris & Dickson', 'IV Fluids', 'Southeast US', 2, 3.40, 0.95, FALSE, TRUE),
+    -- Morris & Dickson (Regional)
+    ('Morris & Dickson', 'Epinephrine', (SELECT id FROM drugs WHERE name = 'Epinephrine'), 'Southeast US', 2, 34.50, 0.95, FALSE, TRUE),
+    ('Morris & Dickson', 'Propofol',    (SELECT id FROM drugs WHERE name = 'Propofol'),    'Southeast US', 2, 44.50, 0.95, FALSE, TRUE),
+    ('Morris & Dickson', 'IV Fluids',   (SELECT id FROM drugs WHERE name = 'IV Fluids'),   'Southeast US', 2, 3.40,  0.95, FALSE, TRUE),
 
-    ('Henry Schein', 'Levofloxacin', 'National (US)', 2, 12.00, 0.94, FALSE, TRUE),
-    ('Henry Schein', 'Penicillin', 'National (US)', 2, 8.00, 0.94, FALSE, TRUE),
-    ('Henry Schein', 'Vaccines', 'National (US)', 2, 22.00, 0.94, FALSE, TRUE),
+    -- Henry Schein (Regional)
+    ('Henry Schein', 'Levofloxacin', (SELECT id FROM drugs WHERE name = 'Levofloxacin'), 'National (US)', 2, 12.00, 0.94, FALSE, TRUE),
+    ('Henry Schein', 'Penicillin',   (SELECT id FROM drugs WHERE name = 'Penicillin'),   'National (US)', 2, 8.00,  0.94, FALSE, TRUE),
+    ('Henry Schein', 'Vaccines',     (SELECT id FROM drugs WHERE name = 'Vaccines'),     'National (US)', 2, 22.00, 0.94, FALSE, TRUE),
 
-    -- Manufacturers (Direct)
-    ('Pfizer (Direct)', 'Vaccines', 'Global', 5, 20.00, 0.99, FALSE, TRUE),
-    ('Pfizer (Direct)', 'Penicillin', 'Global', 5, 7.00, 0.99, FALSE, TRUE),
+    -- Pfizer (Direct Manufacturer)
+    ('Pfizer (Direct)', 'Vaccines',   (SELECT id FROM drugs WHERE name = 'Vaccines'),   'Global', 5, 20.00, 0.99, FALSE, TRUE),
+    ('Pfizer (Direct)', 'Penicillin', (SELECT id FROM drugs WHERE name = 'Penicillin'), 'Global', 5, 7.00,  0.99, FALSE, TRUE),
 
-    ('Teva Pharmaceuticals', 'Epinephrine', 'Global', 7, 32.00, 0.93, FALSE, TRUE),
-    ('Teva Pharmaceuticals', 'Morphine', 'Global', 7, 16.50, 0.93, FALSE, TRUE),
+    -- Teva Pharmaceuticals (Direct Manufacturer)
+    ('Teva Pharmaceuticals', 'Epinephrine', (SELECT id FROM drugs WHERE name = 'Epinephrine'), 'Global', 7, 32.00, 0.93, FALSE, TRUE),
+    ('Teva Pharmaceuticals', 'Morphine',    (SELECT id FROM drugs WHERE name = 'Morphine'),    'Global', 7, 16.50, 0.93, FALSE, TRUE),
 
-    ('Fresenius Kabi', 'Propofol', 'Global', 5, 42.00, 0.95, FALSE, TRUE),
-    ('Fresenius Kabi', 'IV Fluids', 'Global', 5, 3.00, 0.95, FALSE, TRUE),
-    ('Fresenius Kabi', 'Heparin', 'Global', 5, 26.00, 0.95, FALSE, TRUE),
+    -- Fresenius Kabi (Direct Manufacturer)
+    ('Fresenius Kabi', 'Propofol',  (SELECT id FROM drugs WHERE name = 'Propofol'),  'Global', 5, 42.00, 0.95, FALSE, TRUE),
+    ('Fresenius Kabi', 'IV Fluids', (SELECT id FROM drugs WHERE name = 'IV Fluids'), 'Global', 5, 3.00,  0.95, FALSE, TRUE),
+    ('Fresenius Kabi', 'Heparin',   (SELECT id FROM drugs WHERE name = 'Heparin'),   'Global', 5, 26.00, 0.95, FALSE, TRUE),
 
-    ('Baxter International', 'IV Fluids', 'Global', 3, 3.20, 0.96, FALSE, TRUE),
-    ('Baxter International', 'Heparin', 'Global', 3, 26.50, 0.96, FALSE, TRUE),
-    ('Baxter International', 'Morphine', 'Global', 3, 17.25, 0.96, FALSE, TRUE),
+    -- Baxter International (Direct Manufacturer)
+    ('Baxter International', 'IV Fluids', (SELECT id FROM drugs WHERE name = 'IV Fluids'), 'Global', 3, 3.20,  0.96, FALSE, TRUE),
+    ('Baxter International', 'Heparin',   (SELECT id FROM drugs WHERE name = 'Heparin'),   'Global', 3, 26.50, 0.96, FALSE, TRUE),
+    ('Baxter International', 'Morphine',  (SELECT id FROM drugs WHERE name = 'Morphine'),  'Global', 3, 17.25, 0.96, FALSE, TRUE),
 
     -- Nearby Hospitals (Pittsburgh area)
-    ('Pittsburgh General Hospital', 'Epinephrine', 'Pittsburgh, PA', 0, 35.00, 0.90, TRUE, TRUE),
-    ('Pittsburgh General Hospital', 'Oxygen', 'Pittsburgh, PA', 0, 0.50, 0.90, TRUE, TRUE),
-    ('Pittsburgh General Hospital', 'IV Fluids', 'Pittsburgh, PA', 0, 3.50, 0.90, TRUE, TRUE),
+    ('Pittsburgh General Hospital', 'Epinephrine', (SELECT id FROM drugs WHERE name = 'Epinephrine'), 'Pittsburgh, PA', 0, 35.00, 0.90, TRUE, TRUE),
+    ('Pittsburgh General Hospital', 'Oxygen',      (SELECT id FROM drugs WHERE name = 'Oxygen'),      'Pittsburgh, PA', 0, 0.50,  0.90, TRUE, TRUE),
+    ('Pittsburgh General Hospital', 'IV Fluids',   (SELECT id FROM drugs WHERE name = 'IV Fluids'),   'Pittsburgh, PA', 0, 3.50,  0.90, TRUE, TRUE),
 
-    ('UPMC Mercy', 'Propofol', 'Pittsburgh, PA', 0, 45.00, 0.92, TRUE, TRUE),
-    ('UPMC Mercy', 'Heparin', 'Pittsburgh, PA', 0, 28.00, 0.92, TRUE, TRUE),
-    ('UPMC Mercy', 'Morphine', 'Pittsburgh, PA', 0, 18.00, 0.92, TRUE, TRUE),
+    ('UPMC Mercy', 'Propofol', (SELECT id FROM drugs WHERE name = 'Propofol'), 'Pittsburgh, PA', 0, 45.00, 0.92, TRUE, TRUE),
+    ('UPMC Mercy', 'Heparin',  (SELECT id FROM drugs WHERE name = 'Heparin'),  'Pittsburgh, PA', 0, 28.00, 0.92, TRUE, TRUE),
+    ('UPMC Mercy', 'Morphine', (SELECT id FROM drugs WHERE name = 'Morphine'), 'Pittsburgh, PA', 0, 18.00, 0.92, TRUE, TRUE),
 
-    ('Allegheny General Hospital', 'Levofloxacin', 'Pittsburgh, PA', 0, 12.00, 0.91, TRUE, TRUE),
-    ('Allegheny General Hospital', 'Penicillin', 'Pittsburgh, PA', 0, 8.00, 0.91, TRUE, TRUE),
-    ('Allegheny General Hospital', 'Insulin', 'Pittsburgh, PA', 0, 55.00, 0.91, TRUE, TRUE)
+    ('Allegheny General Hospital', 'Levofloxacin', (SELECT id FROM drugs WHERE name = 'Levofloxacin'), 'Pittsburgh, PA', 0, 12.00, 0.91, TRUE, TRUE),
+    ('Allegheny General Hospital', 'Penicillin',   (SELECT id FROM drugs WHERE name = 'Penicillin'),   'Pittsburgh, PA', 0, 8.00,  0.91, TRUE, TRUE),
+    ('Allegheny General Hospital', 'Insulin',      (SELECT id FROM drugs WHERE name = 'Insulin'),      'Pittsburgh, PA', 0, 55.00, 0.91, TRUE, TRUE)
 ON CONFLICT DO NOTHING;
 
 -- ============================================================================
 -- Seed: substitutes table
--- Pre-populate with hard-coded medically validated substitution mappings
+-- drug_id resolved via subquery to satisfy NOT NULL constraint
 -- ============================================================================
 
-INSERT INTO substitutes (drug_name, substitute_name, equivalence_notes, preference_rank)
+INSERT INTO substitutes (drug_id, drug_name, substitute_name, equivalence_notes, preference_rank)
 VALUES
     -- Epinephrine substitutes
-    ('Epinephrine', 'Norepinephrine', 'For cardiac use only (NOT anaphylaxis). Similar vasopressor effects.', 1),
-    ('Epinephrine', 'Vasopressin', 'Second-line for cardiac arrest. Different mechanism but can support BP.', 2),
+    ((SELECT id FROM drugs WHERE name = 'Epinephrine'), 'Epinephrine', 'Norepinephrine',
+     'For cardiac use only (NOT anaphylaxis). Similar vasopressor effects.', 1),
+    ((SELECT id FROM drugs WHERE name = 'Epinephrine'), 'Epinephrine', 'Vasopressin',
+     'Second-line for cardiac arrest. Different mechanism but can support BP.', 2),
 
     -- Propofol substitutes
-    ('Propofol', 'Etomidate', 'Shorter duration. Good for rapid sequence intubation. Less hypotension.', 1),
-    ('Propofol', 'Ketamine', 'Useful for hemodynamically unstable patients. Maintains BP. Different side effect profile.', 2),
-    ('Propofol', 'Midazolam', 'Slower onset. Benzodiazepine class. Useful for sedation but not ideal for induction.', 3),
+    ((SELECT id FROM drugs WHERE name = 'Propofol'), 'Propofol', 'Etomidate',
+     'Shorter duration. Good for rapid sequence intubation. Less hypotension.', 1),
+    ((SELECT id FROM drugs WHERE name = 'Propofol'), 'Propofol', 'Ketamine',
+     'Useful for hemodynamically unstable patients. Maintains BP. Different side effect profile.', 2),
+    ((SELECT id FROM drugs WHERE name = 'Propofol'), 'Propofol', 'Midazolam',
+     'Slower onset. Benzodiazepine class. Useful for sedation but not ideal for induction.', 3),
 
     -- Penicillin substitutes
-    ('Penicillin', 'Amoxicillin', 'Similar spectrum, oral or IV. Well tolerated. First choice substitute.', 1),
-    ('Penicillin', 'Cephalexin', 'First-generation cephalosporin. Check for penicillin allergy cross-reactivity (~10%).', 2),
-    ('Penicillin', 'Azithromycin', 'Macrolide. Use if penicillin allergy confirmed. Different spectrum.', 3),
+    ((SELECT id FROM drugs WHERE name = 'Penicillin'), 'Penicillin', 'Amoxicillin',
+     'Similar spectrum, oral or IV. Well tolerated. First choice substitute.', 1),
+    ((SELECT id FROM drugs WHERE name = 'Penicillin'), 'Penicillin', 'Cephalexin',
+     'First-generation cephalosporin. Check for penicillin allergy cross-reactivity (~10%).', 2),
+    ((SELECT id FROM drugs WHERE name = 'Penicillin'), 'Penicillin', 'Azithromycin',
+     'Macrolide. Use if penicillin allergy confirmed. Different spectrum.', 3),
 
     -- Levofloxacin substitutes
-    ('Levofloxacin', 'Moxifloxacin', 'Same fluoroquinolone class. Similar spectrum with better anaerobic coverage.', 1),
-    ('Levofloxacin', 'Ciprofloxacin', 'Same fluoroquinolone class. Better for UTIs and GI infections.', 2),
-    ('Levofloxacin', 'Doxycycline', 'Tetracycline class. Different mechanism. Broad spectrum alternative.', 3),
+    ((SELECT id FROM drugs WHERE name = 'Levofloxacin'), 'Levofloxacin', 'Moxifloxacin',
+     'Same fluoroquinolone class. Similar spectrum with better anaerobic coverage.', 1),
+    ((SELECT id FROM drugs WHERE name = 'Levofloxacin'), 'Levofloxacin', 'Ciprofloxacin',
+     'Same fluoroquinolone class. Better for UTIs and GI infections.', 2),
+    ((SELECT id FROM drugs WHERE name = 'Levofloxacin'), 'Levofloxacin', 'Doxycycline',
+     'Tetracycline class. Different mechanism. Broad spectrum alternative.', 3),
 
     -- Heparin substitutes
-    ('Heparin', 'Enoxaparin', 'Low molecular weight heparin (LMWH). More predictable dosing. Preferred by many.', 1),
-    ('Heparin', 'Fondaparinux', 'Synthetic factor Xa inhibitor. Use for HIT patients. No cross-reactivity.', 2),
-    ('Heparin', 'Warfarin', 'Oral anticoagulant. Slower onset (days). Requires INR monitoring. For chronic use.', 3),
+    ((SELECT id FROM drugs WHERE name = 'Heparin'), 'Heparin', 'Enoxaparin',
+     'Low molecular weight heparin (LMWH). More predictable dosing. Preferred by many.', 1),
+    ((SELECT id FROM drugs WHERE name = 'Heparin'), 'Heparin', 'Fondaparinux',
+     'Synthetic factor Xa inhibitor. Use for HIT patients. No cross-reactivity.', 2),
+    ((SELECT id FROM drugs WHERE name = 'Heparin'), 'Heparin', 'Warfarin',
+     'Oral anticoagulant. Slower onset (days). Requires INR monitoring. For chronic use.', 3),
 
     -- Insulin substitutes
-    ('Insulin', 'Insulin Lispro', 'Rapid-acting analog (Humalog). Onset 15 min. For meal coverage.', 1),
-    ('Insulin', 'Insulin Glargine', 'Long-acting basal insulin (Lantus). For basal coverage, not acute DKA.', 2),
+    ((SELECT id FROM drugs WHERE name = 'Insulin'), 'Insulin', 'Insulin Lispro',
+     'Rapid-acting analog (Humalog). Onset 15 min. For meal coverage.', 1),
+    ((SELECT id FROM drugs WHERE name = 'Insulin'), 'Insulin', 'Insulin Glargine',
+     'Long-acting basal insulin (Lantus). For basal coverage, not acute DKA.', 2),
 
     -- Morphine substitutes
-    ('Morphine', 'Hydromorphone', '5-7x more potent than morphine. Dilaudid. Adjust dose carefully. Less nausea.', 1),
-    ('Morphine', 'Fentanyl', '50-100x more potent. Rapid onset. Use in ICU settings. Careful dosing required.', 2),
-    ('Morphine', 'Oxycodone', 'Oral option. ~1.5x potency of morphine. For moderate to severe pain.', 3),
+    ((SELECT id FROM drugs WHERE name = 'Morphine'), 'Morphine', 'Hydromorphone',
+     '5-7x more potent than morphine. Dilaudid. Adjust dose carefully. Less nausea.', 1),
+    ((SELECT id FROM drugs WHERE name = 'Morphine'), 'Morphine', 'Fentanyl',
+     '50-100x more potent. Rapid onset. Use in ICU settings. Careful dosing required.', 2),
+    ((SELECT id FROM drugs WHERE name = 'Morphine'), 'Morphine', 'Oxycodone',
+     'Oral option. ~1.5x potency of morphine. For moderate to severe pain.', 3),
 
     -- IV Fluids substitutes
-    ('IV Fluids', 'Lactated Ringers', 'Better for large-volume resuscitation. Contains electrolytes. Preferred for trauma.', 1),
-    ('IV Fluids', 'Normal Saline', '0.9% NaCl. Standard isotonic crystalloid. Universal for most indications.', 2),
-    ('IV Fluids', 'D5W', '5% dextrose in water. For specific indications (hypoglycemia, maintenance). Not for resuscitation.', 3)
+    ((SELECT id FROM drugs WHERE name = 'IV Fluids'), 'IV Fluids', 'Lactated Ringers',
+     'Better for large-volume resuscitation. Contains electrolytes. Preferred for trauma.', 1),
+    ((SELECT id FROM drugs WHERE name = 'IV Fluids'), 'IV Fluids', 'Normal Saline',
+     '0.9% NaCl. Standard isotonic crystalloid. Universal for most indications.', 2),
+    ((SELECT id FROM drugs WHERE name = 'IV Fluids'), 'IV Fluids', 'D5W',
+     '5% dextrose in water. For specific indications (hypoglycemia, maintenance). Not for resuscitation.', 3)
 ON CONFLICT (drug_name, substitute_name) DO NOTHING;
 
 -- ============================================================================
