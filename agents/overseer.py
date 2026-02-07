@@ -6,7 +6,7 @@ Responsibilities:
 - Synthesizes intelligence from Agents 0, 1, and 2
 - Makes decisions using a structured framework with EVIDENCE CITATIONS
 - Writes alerts to the alerts table with source links
-- Returns lists of drugs needing substitutes and orders for downstream agents
+- Returns lists of drugs needing substitutes
 
 API Key: DEDALUS_API_KEY_2 (index 1)
 """
@@ -30,8 +30,25 @@ from agents.shared import (
 AGENT_NAME = "overseer"
 API_KEY_INDEX = 1
 
+# Allowed Alert Types
+ALERT_TYPES = [
+    "RESTOCK_NOW",
+    "SHORTAGE_WARNING", 
+    "SUBSTITUTE_RECOMMENDED",
+    "SCHEDULE_CHANGE",
+    "SUPPLY_CHAIN_RISK"
+]
+
+# Action Required Mapping
+ACTION_REQUIRED_TYPES = {
+    "RESTOCK_NOW": True,
+    "SCHEDULE_CHANGE": True,
+    "SUPPLY_CHAIN_RISK": True,
+    "SHORTAGE_WARNING": False,
+    "SUBSTITUTE_RECOMMENDED": True
+}
+
 # The JSON schema the Overseer expects the LLM to return
-# Now includes EVIDENCE field for traceability
 EXPECTED_JSON_SCHEMA = {
     "decisions": [
         {
@@ -51,9 +68,6 @@ EXPECTED_JSON_SCHEMA = {
         }
     ],
     "drugs_needing_substitutes": ["drug_name_1", "drug_name_2"],
-    "drugs_needing_orders": [
-        {"drug_name": "string", "quantity": 0, "urgency": "ROUTINE | EXPEDITED | EMERGENCY"}
-    ],
     "schedule_adjustments": [
         {
             "surgery_date": "YYYY-MM-DD",
@@ -73,8 +87,17 @@ def build_system_prompt() -> str:
 - **IMMEDIATE (burn_rate < 7 days)**: Generate `RESTOCK_NOW` alert. If criticality is <= 5 AND there's an active shortage, also trigger a `SUBSTITUTE_RECOMMENDED` alert.
 - **WARNING (burn_rate 7–30 days + any risk signal)**: Generate `SHORTAGE_WARNING`. Escalate severity if FDA/news signals confirm a shortage.
 - **Severity Mapping**: CRITICAL (immediate patient risk), URGENT (action in 48h), WARNING (action this week), INFO (awareness).
-- **Orders**: A drug needs an order if its burn rate is below its reorder threshold (typically 14 days). Urgency is EMERGENCY if burn rate < 3 days, EXPEDITED if < 7 days, else ROUTINE.
 - **Substitutes**: A drug needs a substitute if it has a high criticality (rank <= 5) and is in the IMMEDIATE or WARNING zone with a confirmed external shortage signal.
+
+# ALLOWED ACTION TYPES
+You must ONLY use these action types:
+1. RESTOCK_NOW: Manual restocking needed immediately.
+2. SHORTAGE_WARNING: Potential issue, monitoring required.
+3. SUBSTITUTE_RECOMMENDED: Switch to alternative drug.
+4. SCHEDULE_CHANGE: Postpone surgeries to conserve stock.
+5. SUPPLY_CHAIN_RISK: Change supplier or logistical adjustments needed.
+
+**DO NOT USE 'AUTO_ORDER' OR ANY OTHER TYPES.**
 
 # EVIDENCE REQUIREMENTS
 Every decision MUST include at least one evidence entry. Here's how to decide what to include:
@@ -88,32 +111,16 @@ Every decision MUST include at least one evidence entry. Here's how to decide wh
    - MUST have a valid, working URL
    - If unsure about recency or relevance, OMIT the external source
 
-Example decision with inventory evidence only (most common):
+Example decision:
 {
+    "action_type": "RESTOCK_NOW",
+    "drug_name": "Propofol",
     "evidence": [
         {
             "source_type": "INVENTORY",
             "description": "Current stock will deplete based on usage rate",
             "source_url": null,
-            "data_value": "burn_rate: 6.2 days, stock: 124 cylinders, daily_usage: 20"
-        }
-    ]
-}
-
-Example decision with inventory + recent FDA evidence:
-{
-    "evidence": [
-        {
-            "source_type": "INVENTORY",
-            "description": "Low stock levels detected",
-            "source_url": null,
-            "data_value": "burn_rate: 5 days, stock: 50 vials, daily_usage: 10"
-        },
-        {
-            "source_type": "FDA",
-            "description": "Active FDA shortage (reported this week)",
-            "source_url": "https://www.fda.gov/drugs/...",
-            "data_value": "FDA status: ACTIVE, published: 2026-02-05"
+            "data_value": "burn_rate: 6.2 days, stock: 124 cylinders"
         }
     ]
 }
@@ -144,7 +151,6 @@ def generate_fallback_decisions(inventory: list, agent_logs: dict, shortages: li
     """A simple rule-based fallback if the LLM fails. Includes evidence."""
     print("WARNING: LLM call failed or is mocked. Generating fallback decisions.")
     decisions = []
-    drugs_needing_orders = []
     drugs_needing_substitutes = []
 
     # Get inventory analysis from agent_0
@@ -202,11 +208,6 @@ def generate_fallback_decisions(inventory: list, agent_logs: dict, shortages: li
                 "description": f"Stock for {drug_name} is critically low with ~{burn_rate:.1f} days remaining. Immediate action required.",
                 "evidence": evidence
             })
-            drugs_needing_orders.append({
-                "drug_name": drug_name,
-                "quantity": 100,
-                "urgency": "EMERGENCY" if burn_rate < 3 else "EXPEDITED"
-            })
             if drug_info['rank'] <= 5:
                 drugs_needing_substitutes.append(drug_name)
 
@@ -222,10 +223,43 @@ def generate_fallback_decisions(inventory: list, agent_logs: dict, shortages: li
 
     return {
         "decisions": decisions,
-        "drugs_needing_orders": drugs_needing_orders,
         "drugs_needing_substitutes": drugs_needing_substitutes,
         "schedule_adjustments": [],
         "summary": f"Fallback analysis: {len(decisions)} alerts generated based on inventory burn rates."
+    }
+
+
+def determine_alert_metadata(alert_type: str, evidence: List[Dict]) -> Dict[str, Any]:
+    """
+    Determines the action_required flag and the primary source string based on alert type and evidence.
+    
+    Rules:
+    - action_required: True if alert_type in [RESTOCK_NOW, SCHEDULE_CHANGE, SUPPLY_CHAIN_RISK]
+    - source: 
+        - 'Stock' if primary evidence is INVENTORY and no external URL
+        - URL if external source matches
+        - NULL otherwise
+    """
+    # 1. Action Required Logic
+    action_required = ACTION_REQUIRED_TYPES.get(alert_type, False)
+
+    # 2. Source Logic
+    source = None
+    
+    # Check for external URL first (priority for alerts driven by external factors)
+    external_evidence = next((e for e in evidence if e.get('source_url') and e.get('source_url').startswith('http')), None)
+    
+    if external_evidence:
+        source = external_evidence.get('source_url')
+    else:
+        # If no external URL, checks if it's purely inventory based
+        inventory_evidence = next((e for e in evidence if e.get('source_type') == 'INVENTORY'), None)
+        if inventory_evidence:
+            source = "Stock"
+            
+    return {
+        "action_required": action_required,
+        "source": source
     }
 
 
@@ -269,8 +303,7 @@ def run(run_id: UUID) -> Optional[Dict[str, Any]]:
             "current_inventory_snapshot": inventory,
             "current_unresolved_shortages_with_sources": shortages_with_sources
         }
-        user_prompt = json.dumps(user_prompt_data, default=str)
-
+        
         # 3. Call LLM, with fallback
         # INTEGRATING MCP CLIENT-SERVER ARCHITECTURE
         import subprocess
@@ -301,19 +334,8 @@ def run(run_id: UUID) -> Optional[Dict[str, Any]]:
                 print("Connected to MCP Server.", flush=True)
                 
                 # Fetch available tools from the server
-                available_tools = await client.list_tools()
-                
-                # Convert MCP tools to OpenAI tool schema
-                openai_tools = []
-                for tool in available_tools.tools:
-                    openai_tools.append({
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "description": tool.description,
-                            "parameters": tool.inputSchema
-                        }
-                    })
+                # We do NOT pass tools to the LLM for general use to prevent web searching
+                # We only use specific tools deterministically here
                 
                 # CRITICAL: Deterministically call the cleanup tool BEFORE the LLM.
                 # This ensures the database is clean regardless of LLM "choice".
@@ -324,51 +346,16 @@ def run(run_id: UUID) -> Optional[Dict[str, Any]]:
                     print(f"Cleanup Result: {metrics}", flush=True)
                     # Add this context to the user prompt so the LLM knows it's done
                     user_prompt_data["system_note"] = f"Database cleanup completed: {metrics}"
-                    user_prompt_str = json.dumps(user_prompt_data, default=str)
                 except Exception as cleanup_err:
                     print(f"Warning: Cleanup tool failed: {cleanup_err}", flush=True)
-                    user_prompt_str = user_prompt # Fallback to original prompt
 
-                # Initial LLM Call
-                # We still pass tools if the LLM wants to use them for other reasons, 
-                # but the critical cleanup is already done.
-                response = call_dedalus(system_prompt, user_prompt_str, API_KEY_INDEX, EXPECTED_JSON_SCHEMA, tools=openai_tools)
-                
-                final_response = response
-                
-                # Handle Tool Calls (if any other tools are used or if it tries to call it again)
-                if response and "tool_calls" in response:
-                    tool_calls = response["tool_calls"]
-                    print(f"Overseer elected to use tools: {len(tool_calls)} call(s).", flush=True)
-                    
-                    tool_outputs = []
-                    for tool_call in tool_calls:
-                        function_name = tool_call["function"]["name"]
-                        args_str = tool_call["function"]["arguments"]
-                        args = json.loads(args_str) if args_str else {}
-                        
-                        print(f"Executing Tool via MCP Client: {function_name}({args})", flush=True)
-                        
-                        # Call the tool via MCP Client
-                        result = await client.call_tool(function_name, args)
-                        
-                        # MCP result content is a list of TextContent/ImageContent
-                        result_text = result.content[0].text if result.content else "No output"
-                        
-                        print(f"MCP Tool Result: {result_text}", flush=True)
-                        tool_outputs.append(result_text)
+                user_prompt_str = json.dumps(user_prompt_data, default=str)
 
-                    # Re-prompt LLM with tool outputs
-                    user_prompt_data["tool_results"] = tool_outputs
-                    # Clear cleanup instruction to avoid double loop if we want, but simple re-prompt works
-                    user_prompt_data["note"] = "Tools have been executed. Please proceed with final decision synthesis."
-                    user_prompt_str = json.dumps(user_prompt_data, default=str)
-                    
-                    print("Re-calling Overseer for final decisions after tool execution...", flush=True)
-                    final_response = call_dedalus(system_prompt, user_prompt_str, API_KEY_INDEX, EXPECTED_JSON_SCHEMA, tools=openai_tools)
+                # Initial LLM Call - NO TOOLS passed to prevent hallucinated searches
+                response = call_dedalus(system_prompt, user_prompt_str, API_KEY_INDEX, EXPECTED_JSON_SCHEMA)
                 
                 await client.close()
-                return final_response
+                return response
 
             except Exception as e:
                 print(f"MCP Interaction Error: {e}", flush=True)
@@ -381,19 +368,26 @@ def run(run_id: UUID) -> Optional[Dict[str, Any]]:
                     print(f"MCP Server STDERR: {stderr}", flush=True)
                 
                 # Fallback to no-tool execution if MCP fails
-                return call_dedalus(system_prompt, user_prompt, API_KEY_INDEX, EXPECTED_JSON_SCHEMA)
+                return call_dedalus(system_prompt, user_prompt_str, API_KEY_INDEX, EXPECTED_JSON_SCHEMA)
             finally:
                 # Terminate the server
                 server_process.terminate()
                 server_process.wait()
 
-        # Run the async logic
+    # Run the async logic
         analysis_payload = asyncio.run(run_overseer_with_mcp())
+        
         if not analysis_payload:
+            print("MCP/LLM returned no payload. Using fallback.")
             analysis_payload = generate_fallback_decisions(inventory, agent_outputs, unresolved_shortages)
+        else:
+            print("Received analysis payload from MCP/LLM.")
 
         # 4. Write alerts to the database with evidence in action_payload (dedupe per run_id)
         if supabase and 'decisions' in analysis_payload:
+            decisions = analysis_payload.get('decisions', [])
+            print(f"Processing {len(decisions)} decisions for alert generation...")
+            
             existing_alerts = (
                 supabase.table('alerts')
                 .select('alert_type,drug_name,title,run_id')
@@ -406,12 +400,26 @@ def run(run_id: UUID) -> Optional[Dict[str, Any]]:
                 f"{a.get('alert_type')}|{a.get('drug_name')}|{a.get('title')}"
                 for a in existing_alerts
             }
+            
             alerts_to_insert = []
-            for alert in analysis_payload['decisions']:
-                drug_id = next((d['id'] for d in inventory if d['name'] == alert.get('drug_name')), None)
-                key = f"{alert.get('action_type')}|{alert.get('drug_name')}|{alert.get('title')}"
-                if key in existing_keys:
+            for alert in decisions:
+                # Robust drug ID lookup
+                matched_drug = next((d for d in inventory if d['name'] == alert.get('drug_name')), None)
+                drug_id = matched_drug['id'] if matched_drug else None
+                
+                # Validate Alert Type
+                alert_type = alert.get("action_type")
+                if alert_type not in ALERT_TYPES:
+                    print(f"WARNING: Invalid alert type '{alert_type}' generated. Skipping.")
                     continue
+
+                key = f"{alert_type}|{alert.get('drug_name')}|{alert.get('title')}"
+                if key in existing_keys:
+                    print(f"Skipping duplicate alert: {key}")
+                    continue
+
+                # Determine Metadata (Action Required & Source)
+                metadata = determine_alert_metadata(alert_type, alert.get("evidence", []))
 
                 # Store evidence in action_payload for frontend display
                 action_payload = {
@@ -419,21 +427,31 @@ def run(run_id: UUID) -> Optional[Dict[str, Any]]:
                     "order_details": alert.get("order_details")
                 }
 
-                alerts_to_insert.append({
+                new_alert = {
                     "run_id": str(run_id),
-                    "alert_type": alert.get("action_type"),
+                    "alert_type": alert_type,
                     "severity": alert.get("severity"),
                     "drug_name": alert.get("drug_name"),
                     "drug_id": drug_id,
                     "title": alert.get("title"),
                     "description": alert.get("description"),
                     "action_payload": action_payload,
-                })
+                    "action_required": metadata["action_required"],
+                    "source": metadata["source"]
+                }
+                alerts_to_insert.append(new_alert)
 
             if alerts_to_insert:
                 print(f"Inserting {len(alerts_to_insert)} alerts into the database...")
-                supabase.table('alerts').insert(alerts_to_insert).execute()
-                print("Alert insertion complete.")
+                try:
+                    result = supabase.table('alerts').insert(alerts_to_insert).execute()
+                    print(f"Alert insertion complete. Inserted: {len(result.data)} records.")
+                except Exception as e:
+                    print(f"ERROR: Failed to insert alerts: {e}")
+            else:
+                print("No new alerts to insert (either no decisions or all were duplicates).")
+        else:
+            print("Skipping alert insertion: Supabase client missing or no 'decisions' in payload.")
 
         # 5. Log final output
         summary = analysis_payload.get('summary', 'Overseer analysis completed.')
@@ -451,4 +469,5 @@ def run(run_id: UUID) -> Optional[Dict[str, Any]]:
 
 
 if __name__ == '__main__':
-    print("Overseer cannot be run standalone without preceding agent logs in the database.")
+    print("Overseer cannot be run standalone without preceding agent logs in the database. Use pipeline.py")
+
