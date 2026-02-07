@@ -77,15 +77,15 @@ export default function DrugsPage() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="w-10 px-4 py-3"></th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Drug Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Stock</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Daily Usage</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Predicted Usage</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Burn Rate</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Predicted Burn</th>
+              <th className="w-10 px-3 py-3"></th>
+              <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
+              <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Drug Name</th>
+              <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+              <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Stock</th>
+              <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Daily Usage</th>
+              <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Pred. Usage</th>
+              <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Burn Rate</th>
+              <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Pred. Burn</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -96,25 +96,25 @@ export default function DrugsPage() {
                   className={`hover:bg-gray-50 cursor-pointer ${getBurnRateBgColor(drug.predicted_burn_rate_days ?? drug.burn_rate_days)}`}
                   onClick={() => toggleExpand(drug.id)}
                 >
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="px-3 py-4 whitespace-nowrap">
                     {expandedDrugId === drug.id ? (
                       <ChevronDown className="w-5 h-5 text-gray-500" />
                     ) : (
                       <ChevronRight className="w-5 h-5 text-gray-500" />
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{drug.criticality_rank}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{drug.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{drug.type}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                  <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{drug.criticality_rank}</td>
+                  <td className="px-3 py-4 text-sm font-bold text-gray-900 max-w-[200px] break-words">{drug.name}</td>
+                  <td className="px-3 py-4 text-sm text-gray-500 break-words">{drug.type}</td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-right">
                     {formatNumber(drug.stock_quantity)} {drug.unit}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{formatNumber(drug.usage_rate_daily)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right">{formatNumber(drug.predicted_usage_rate)}</td>
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm text-right ${getBurnRateColor(drug.burn_rate_days)}`}>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-right">{formatNumber(drug.usage_rate_daily)}</td>
+                  <td className="px-3 py-4 whitespace-nowrap text-sm text-right">{formatNumber(drug.predicted_usage_rate)}</td>
+                  <td className={`px-3 py-4 whitespace-nowrap text-sm text-right ${getBurnRateColor(drug.burn_rate_days)}`}>
                     {drug.burn_rate_days ? `${formatNumber(drug.burn_rate_days)} days` : '—'}
                   </td>
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm text-right ${getBurnRateColor(drug.predicted_burn_rate_days)}`}>
+                  <td className={`px-3 py-4 whitespace-nowrap text-sm text-right ${getBurnRateColor(drug.predicted_burn_rate_days)}`}>
                     {drug.predicted_burn_rate_days ? `${formatNumber(drug.predicted_burn_rate_days)} days` : '—'}
                   </td>
                 </tr>
@@ -200,11 +200,10 @@ export default function DrugsPage() {
                                 {drug.shortages.map(shortage => (
                                   <div key={shortage.id} className="p-2 bg-red-50 rounded text-sm">
                                     <div className="flex justify-between items-center">
-                                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                        shortage.impact_severity === 'CRITICAL' ? 'bg-red-100 text-red-800' :
+                                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${shortage.impact_severity === 'CRITICAL' ? 'bg-red-100 text-red-800' :
                                         shortage.impact_severity === 'HIGH' ? 'bg-orange-100 text-orange-800' :
-                                        'bg-yellow-100 text-yellow-800'
-                                      }`}>
+                                          'bg-yellow-100 text-yellow-800'
+                                        }`}>
                                         {shortage.impact_severity}
                                       </span>
                                       <span className="text-xs text-gray-500">{formatDate(shortage.reported_date)}</span>
