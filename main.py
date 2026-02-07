@@ -15,7 +15,7 @@ import sys
 import time
 import argparse
 from datetime import datetime
-from agents.pipeline import run_pipeline
+from agents.pipeline import run_pipeline, run_quick_pipeline
 from agents.shared import validate_environment
 
 def main():
@@ -80,51 +80,141 @@ def main():
             sys.exit(1)
 
     else:
-        # Continuous mode
-        interval_seconds = args.interval * 60
-        print(f"Mode: Continuous execution")
-        print(f"Interval: {args.interval} minutes ({interval_seconds} seconds)")
-        print(f"Press Ctrl+C to stop\n")
+        # Continuous mode - Async Realtime Listener
+        import asyncio
+        from supabase import create_async_client
+        from agents.shared import SUPABASE_URL, SUPABASE_SERVICE_KEY
 
-        run_count = 0
+        if not (SUPABASE_URL and SUPABASE_SERVICE_KEY):
+            print("Error: Supabase credentials missing.")
+            sys.exit(1)
+
+        async def listen_for_changes():
+            print(f"Mode: Continuous execution (Realtime Trigger)")
+            
+            # Initialize Async Client
+            async_supabase = await create_async_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+            print(f"Listening for changes on 'drugs' table...")
+            
+            # Smart Loop Prevention
+            last_run_time = 0
+            min_interval = 2  # Seconds - debounce quick clicks
+            # Counter to skip agent self-updates from full pipeline (agent_0 updates 10 drugs)
+            skip_count = 0
+
+            def handle_db_change(payload):
+                nonlocal last_run_time, skip_count
+                current_time = time.time()
+
+                
+                # Inspect Payload Structure (Debug)
+                try:
+                    # supabase-py Realtime returns: {'data': {...}, 'ids': [...]}
+                    # The actual event info is in payload['data']
+                    data = payload.get('data', {}) if isinstance(payload, dict) else payload
+                    
+                    table_name = data.get('table')
+                    # 'type' can be a string or an enum like RealtimePostgresChangesListenEvent.Update
+                    event_type_raw = data.get('type')
+                    if hasattr(event_type_raw, 'value'):
+                        event_type = event_type_raw.value  # Get string from enum
+                    else:
+                        event_type = str(event_type_raw) if event_type_raw else None
+                    
+                    new_record = data.get('record', {})
+                    old_record = data.get('old_record', {})
+
+                    print(f"\n[Realtime] Event: {event_type} on table '{table_name}'", flush=True)
+                    
+                except Exception as e:
+                    print(f"[Realtime Error] Failed to parse payload: {e}", flush=True)
+                    return
+
+                # Only process valid database events
+                if event_type not in ('UPDATE', 'INSERT', 'DELETE'):
+                    print(f"  -> Ignoring non-database event: {event_type}")
+                    return
+                
+                if table_name != 'drugs':
+                    print(f"  -> Ignoring event on table: {table_name}")
+                    return
+
+                # Skip counter: After FULL pipeline runs, agent_0 updates 10 drugs
+                # Quick pipeline doesn't update DB, so no skip needed after quick runs
+                if skip_count > 0:
+                    skip_count -= 1
+                    print(f"  -> Skipping agent self-update ({skip_count} remaining to skip)")
+                    return
+
+                # Check Debounce (too fast user clicks)
+                if current_time - last_run_time < min_interval:
+                    print(f"  -> Skipping (debounced)")
+                    return
+
+                print(f"[Realtime] Triggering QUICK pipeline (Agent 0 Quick Mode + Overseer)...", flush=True)
+                last_run_time = time.time()
+                
+                # Run quick pipeline in separate thread (Overseer only)
+                import concurrent.futures
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(run_quick_pipeline)
+                        result = future.result()
+                    # Quick pipeline doesn't update DB, so no skip_count needed
+                    print(f"✓ Quick pipeline completed. Status: {result.get('status')}", flush=True)
+                except Exception as e:
+                    print(f"✗ Quick pipeline failed: {e}")
+
+
+            try:
+                # client.channel is synchronous
+                channel = async_supabase.channel('drug-updates')
+                
+                # channel.on returns the channel (synchronous builder)
+                # AsyncRealtimeChannel uses on_postgres_changes instead of .on()
+                await channel.on_postgres_changes(
+                    event='*',
+                    schema='public',
+                    table='drugs',
+                    callback=handle_db_change
+                ).subscribe()
+
+                print("✓ Subscribed to Realtime events on 'drugs' table.")
+                
+                # Initial Run on Startup (as requested)
+                print("\n[Startup] Running initial pipeline analysis...")
+                import concurrent.futures
+                try:
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(run_pipeline)
+                        result = future.result()
+                    # After FULL pipeline, agent_0 updates 10 drugs -> skip those events
+                    skip_count = 10
+                    print(f"✓ Initial pipeline run completed. Status: {result.get('status')}")
+                    print(f"  (Will skip next {skip_count} updates to prevent self-loop)")
+                except Exception as e:
+                    print(f"✗ Initial pipeline run failed: {e}")
+                    skip_count = 10  # Still set on failure
+
+                print("\n  - Waiting for updates... (Press Ctrl+C to stop)")
+
+
+                # Keep alive
+                while True:
+                    await asyncio.sleep(1)
+
+            except Exception as e:
+                print(f"Realtime error: {e}")
+                # Don't try to close the client as it doesn't have a close method exposed here
+
 
         try:
-            while True:
-                run_count += 1
-                print(f"\n{'='*80}")
-                print(f"EXECUTION #{run_count}")
-                print(f"Started: {datetime.now().isoformat()}")
-                print(f"{'='*80}\n")
-
-                try:
-                    result = run_pipeline()
-                    print(f"\n✓ Execution #{run_count} completed")
-                    print(f"Status: {result.get('status')}")
-                    print(f"Duration: {result.get('total_duration_seconds', 0):.2f}s")
-
-                    if result.get('errors'):
-                        print(f"⚠️  Errors: {len(result['errors'])}")
-                        for error in result['errors']:
-                            print(f"  - {error}")
-
-                except Exception as e:
-                    print(f"\n✗ Execution #{run_count} failed: {e}")
-                    print("Continuing to next scheduled run...")
-
-                # Calculate next run time
-                next_run = datetime.now().timestamp() + interval_seconds
-                next_run_dt = datetime.fromtimestamp(next_run)
-
-                print(f"\nNext run scheduled for: {next_run_dt.isoformat()}")
-                print(f"Sleeping for {args.interval} minutes...")
-
-                time.sleep(interval_seconds)
-
+            asyncio.run(listen_for_changes())
         except KeyboardInterrupt:
-            print(f"\n\nReceived interrupt signal. Shutting down gracefully...")
-            print(f"Total executions: {run_count}")
-            print(f"Goodbye!\n")
+            print("\nShutting down...")
             sys.exit(0)
 
 if __name__ == '__main__':
+    # Imports are handled inside main functions or at top
+    pass
     main()

@@ -120,14 +120,40 @@ export default function Dashboard() {
     const newVal = parseInt(editValue, 10)
     if (isNaN(newVal) || newVal < 0) return
 
-    // Optimistic update
-    setDrugs(prev => prev.map(d => d.id === drugId ? { ...d, stock_quantity: newVal } : d))
+    // Find drug to get usage_rate
+    const drug = drugs.find(d => d.id === drugId)
+    if (!drug) return
+
+    // Calculate burn rate: stock / daily_usage
+    const burn_rate = drug.usage_rate_daily > 0
+      ? newVal / drug.usage_rate_daily
+      : null
+
+    // Optimistic update with calculated burn_rate
+    setDrugs(prev => prev.map(d =>
+      d.id === drugId
+        ? { ...d, stock_quantity: newVal, burn_rate_days: burn_rate }
+        : d
+    ))
     setEditingId(null)
 
-    const { error } = await supabase.from('drugs').update({ stock_quantity: newVal }).eq('id', drugId)
+    // Update DB with stock AND burn_rate for instant backend sync
+    console.log(`[UPDATE] Sending to DB: stock=${newVal}, burn_rate=${burn_rate}, drug_id=${drugId}`)
+    const { data, error } = await supabase
+      .from('drugs')
+      .update({
+        stock_quantity: newVal,
+        burn_rate_days: burn_rate,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', drugId)
+      .select()
+
     if (error) {
       console.error("Failed to update stock:", error)
       fetchData() // Revert
+    } else {
+      console.log("[UPDATE] Database update successful:", data)
     }
   }
 
@@ -136,10 +162,6 @@ export default function Dashboard() {
       // ... (existing action handling logic)
       if (data.actionType === 'order' && data.originalAlert) {
         handleAcknowledge(data.originalAlert.id);
-      } else if (data.actionType === 'supplier' && data.originalAlert) {
-        handleAcknowledge(data.originalAlert.id);
-      } else {
-        handleResolveShortage(data.originalShortage.id);
       }
     } else if (data.originalAlert) {
       handleAcknowledge(data.originalAlert.id);
