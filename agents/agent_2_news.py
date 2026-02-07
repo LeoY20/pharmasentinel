@@ -2,7 +2,7 @@ import json
 import asyncio
 import os
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 import traceback
 
@@ -22,6 +22,10 @@ from agents.shared import (
 
 AGENT_NAME = "agent_2"
 API_KEY_INDEX = 1
+NEWS_TARGET_ARTICLES = 6
+NEWS_MAX_ROUNDS = 2
+NEWS_MAX_TOTAL = 20
+MAX_LLM_QUERIES = 3
 
 # The JSON schema Agent 2 expects the LLM to return
 EXPECTED_JSON_SCHEMA = {
@@ -32,7 +36,7 @@ EXPECTED_JSON_SCHEMA = {
             "headline": "string",
             "source": "string",
             "url": "string (valid URL to the article)",
-            "published_date": "YYYY-MM-DD (prefer last 30 days; allow older if long-term shortage)",
+            "published_date": "YYYY-MM-DD (prefer last 30 days; allow older if long-term shortage still only up to our max days)",
             "sentiment": "POSITIVE | NEUTRAL | NEGATIVE | CRITICAL",
             "supply_chain_impact": "NONE | LOW | MEDIUM | HIGH | CRITICAL",
             "confidence": 0.0,
@@ -66,21 +70,25 @@ async def fetch_news_via_web_agent() -> List[Dict[str, Any]]:
     drug_list = ", ".join(MONITORED_DRUG_NAMES[:5])  # Top 5 critical drugs
 
     # Get current date for recency filtering
-    from datetime import datetime, timedelta
     today = datetime.now()
     recent_days = 30
-    max_days = 180
+    max_days = 365
     recent_start = (today - timedelta(days=recent_days)).strftime('%Y-%m-%d')
     max_start = (today - timedelta(days=max_days)).strftime('%Y-%m-%d')
     today_str = today.strftime('%Y-%m-%d')
 
-    search_prompt = f"""Search for RECENT news (prefer last {recent_days} days, between {recent_start} and {today_str}) about pharmaceutical drug shortages.
+    def build_search_prompt(query_hint: str | None = None) -> str:
+        focus_line = f"Focus on this query: {query_hint}" if query_hint else "Use your best judgment to find relevant US/local articles."
+        return f"""Search for RECENT news (prefer last {recent_days} days, between {recent_start} and {today_str}) about pharmaceutical drug shortages.
 If necessary, you may include older articles (as far back as {max_start}) ONLY if they clearly describe long-term or upcoming shortages.
 
 CRITICAL REQUIREMENTS:
 - STRONGLY prefer articles published in the last {recent_days} days
 - You may include older articles up to {max_days} days old ONLY if they indicate long-term or future shortages
+- Articles older than {max_days} must NOT be included
 - If you cannot find recent or clearly long-term actionable articles, return an empty array
+- Prefer U.S. or local relevance. Avoid non‑U.S. shortages unless clearly relevant to U.S. supply.
+{focus_line}
 
 Search for:
 1. Current drug shortage alerts affecting: {drug_list}
@@ -110,29 +118,9 @@ Return articles (prefer recent) as a JSON array:
 
 If no relevant articles are found, return an empty array: []
 Quality over quantity - only include genuinely relevant articles with clear supply-impact signals."""
-
-    try:
-        print("  Searching web for drug shortage news via Dedalus agent...")
-
-        client = AsyncDedalus(api_key=api_key)
-        runner = DedalusRunner(client)
-
-        result = await runner.run(
-            input=search_prompt,
-            model="openai/gpt-4o-mini",
-            mcp_servers=[
-                "tsion/exa",                 # Semantic search engine
-                "windsor/brave-search-mcp"   # Privacy-focused web search
-            ]
-        )
-
-        # Parse the agent's output
-        output_text = result.final_output if hasattr(result, 'final_output') else str(result)
-
-        # Try to extract JSON from the response
+    def parse_articles(output_text: str) -> List[Dict[str, Any]]:
         articles = []
         try:
-            # Look for JSON array in the output
             if "```json" in output_text:
                 import re
                 match = re.search(r"```json\s*([\s\S]*?)\s*```", output_text)
@@ -141,23 +129,85 @@ Quality over quantity - only include genuinely relevant articles with clear supp
             elif output_text.strip().startswith("["):
                 articles = json.loads(output_text)
             else:
-                # Try to find any JSON array
                 import re
                 match = re.search(r"\[[\s\S]*\]", output_text)
                 if match:
                     articles = json.loads(match.group(0))
         except json.JSONDecodeError:
-            print(f"  WARNING: Could not parse JSON from web agent response")
-            # Create a single article from the text response
-            articles = [{
-                "title": "Web Search Results",
-                "source": "Dedalus Web Agent",
-                "url": "",
-                "description": output_text[:1000] if output_text else "No results"
-            }]
-
-        print(f"  ✓ Found {len(articles)} articles via web search")
+            articles = []
         return articles
+
+    def generate_followup_queries(found_articles: List[Dict[str, Any]]) -> List[str]:
+        system_prompt = """Generate 1-3 concise News search queries focused on U.S. drug shortages.
+Constraints:
+- Must be U.S./FDA focused.
+- Prefer monitored drugs and manufacturing/supply disruptions.
+- Avoid non‑U.S. regions unless clearly tied to U.S. supply.
+Return JSON: {\"queries\": [\"...\"]}"""
+
+        user_prompt = json.dumps({
+            "hospital_location": HOSPITAL_LOCATION,
+            "monitored_drugs": MONITORED_DRUG_NAMES,
+            "recent_titles": [a.get("title") for a in found_articles if a.get("title")][:10]
+        }, default=str)
+
+        result = call_dedalus(system_prompt, user_prompt, API_KEY_INDEX, {"queries": ["string"]})
+        if not result or "queries" not in result:
+            return []
+        queries = [q.strip() for q in result.get("queries", []) if isinstance(q, str)]
+        return queries[:MAX_LLM_QUERIES]
+
+    try:
+        print("  Searching web for drug shortage news via Dedalus agent...")
+
+        client = AsyncDedalus(api_key=api_key)
+        runner = DedalusRunner(client)
+
+        collected: List[Dict[str, Any]] = []
+        seen = set()
+        queue: List[str | None] = [None]
+        rounds = 0
+
+        while queue and rounds < NEWS_MAX_ROUNDS:
+            query_hint = queue.pop(0)
+            rounds += 1
+            prompt = build_search_prompt(query_hint)
+
+            result = await runner.run(
+                input=prompt,
+                model="openai/gpt-4o-mini",
+                mcp_servers=[
+                    "tsion/exa",                 # Semantic search engine
+                    "windsor/brave-search-mcp"   # Privacy-focused web search
+                ]
+            )
+
+            output_text = result.final_output if hasattr(result, 'final_output') else str(result)
+            articles = parse_articles(output_text)
+            if not articles:
+                print("  WARNING: Could not parse JSON from web agent response")
+
+            filtered = filter_recent_articles(articles, max_days=max_days)
+            filtered = filter_location_articles(filtered)
+
+            for a in filtered:
+                key = a.get("url") or a.get("title")
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                collected.append(a)
+
+            if len(collected) >= NEWS_TARGET_ARTICLES:
+                break
+
+            if rounds < NEWS_MAX_ROUNDS:
+                followups = generate_followup_queries(collected)
+                if followups:
+                    queue.extend(followups)
+
+        collected = collected[:NEWS_MAX_TOTAL]
+        print(f"  ✓ Found {len(collected)} articles via web search (multi-round)")
+        return collected
 
     except Exception as e:
         print(f"  ERROR: Web search failed: {e}")
@@ -173,10 +223,9 @@ def build_system_prompt() -> str:
     """Builds the system prompt for Agent 2."""
     drug_ranking_info = "\n".join([f"- Rank {d['rank']}: {d['name']}" for d in MONITORED_DRUGS])
 
-    from datetime import datetime, timedelta
     today = datetime.now()
     recent_days = 30
-    max_days = 180
+    max_days = 365
     recent_start = (today - timedelta(days=recent_days)).strftime('%Y-%m-%d')
 
     return f"""You are an expert pharmaceutical supply chain analyst. Your task is to analyze news articles for early warning signals of drug shortages.
@@ -256,6 +305,75 @@ def generate_fallback_analysis(articles: List[Dict[str, Any]]) -> Dict[str, Any]
     }
 
 
+def filter_recent_articles(articles: List[Dict[str, Any]], max_days: int = 365) -> List[Dict[str, Any]]:
+    """Drop articles older than max_days or missing a parseable date."""
+    cutoff = datetime.now() - timedelta(days=max_days)
+    filtered = []
+    for a in articles:
+        raw_date = a.get("published_date") or a.get("publishedAt") or a.get("date")
+        if not raw_date:
+            continue
+        try:
+            # Accept YYYY-MM-DD or full ISO timestamps
+            date_str = str(raw_date)[:10]
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+        except Exception:
+            continue
+        if dt >= cutoff:
+            filtered.append(a)
+    return filtered
+
+
+def filter_location_articles(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Prefer US/local relevance; drop clearly non‑US articles."""
+    us_keywords = ["united states", "u.s.", "usa", "fda", "cdc"]
+    # Basic location hints from hospital location (city/state)
+    location_hint = (HOSPITAL_LOCATION or "").lower()
+    non_us_markers = [
+        "india", "china", "europe", "uk", "england", "australia", "canada",
+        "germany", "france", "spain", "italy", "brazil", "mexico", "japan"
+    ]
+
+    def is_us_relevant(text: str, url: str) -> bool:
+        t = text.lower()
+        u = (url or "").lower()
+        has_us = any(k in t for k in us_keywords) or any(k in u for k in us_keywords)
+        if location_hint:
+            city = location_hint.split(",")[0].strip()
+            if city:
+                has_us = has_us or (city in t)
+        has_non_us = any(k in t for k in non_us_markers) or any(k in u for k in non_us_markers)
+        return has_us and not (has_non_us and not has_us)
+
+    filtered = []
+    for a in articles:
+        text = f"{a.get('title','')} {a.get('description','')} {a.get('source','')}"
+        if is_us_relevant(text, a.get("url", "")):
+            filtered.append(a)
+    return filtered
+
+
+def filter_recent_signals(payload: Dict[str, Any], max_days: int = 365) -> Dict[str, Any]:
+    """Drop risk_signals older than max_days or missing a parseable date."""
+    cutoff = datetime.now() - timedelta(days=max_days)
+    signals = payload.get("risk_signals", []) if isinstance(payload, dict) else []
+    filtered = []
+    for s in signals:
+        raw_date = s.get("published_date") or s.get("publishedAt") or s.get("date")
+        if not raw_date:
+            continue
+        try:
+            date_str = str(raw_date)[:10]
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+        except Exception:
+            continue
+        if dt >= cutoff:
+            filtered.append(s)
+    if isinstance(payload, dict):
+        payload["risk_signals"] = filtered
+    return payload
+
+
 def run(run_id: UUID):
     """Executes the full workflow for Agent 2."""
     print(f"\n----- Running Agent 2: News Analyzer for run_id: {run_id} -----")
@@ -276,7 +394,8 @@ def run(run_id: UUID):
             "description": a.get("description"),
             "source": a.get("source"),
             "url": a.get("url"),
-            "drugs_mentioned": a.get("drugs_mentioned", [])
+            "drugs_mentioned": a.get("drugs_mentioned", []),
+            "published_date": a.get("published_date") or a.get("publishedAt") or a.get("date")
         } for a in articles[:25]]
 
         user_prompt = json.dumps(prompt_articles, default=str)
@@ -284,6 +403,7 @@ def run(run_id: UUID):
         llm_analysis = call_dedalus(system_prompt, user_prompt, API_KEY_INDEX, EXPECTED_JSON_SCHEMA)
 
         analysis_payload = llm_analysis or generate_fallback_analysis(articles)
+        analysis_payload = filter_recent_signals(analysis_payload, max_days=365)
 
         # 3. Process Results (Upsert logic for shortages)
         if supabase and 'risk_signals' in analysis_payload:
@@ -293,6 +413,15 @@ def run(run_id: UUID):
             for signal in analysis_payload.get('risk_signals', []):
                 drug_name = signal.get('drug_name')
                 if not drug_name or drug_name == "Unknown":
+                    continue
+
+                # Drop non‑US/non‑local signals (extra safety)
+                if not filter_location_articles([{
+                    "title": signal.get("headline"),
+                    "description": signal.get("reasoning"),
+                    "source": signal.get("source"),
+                    "url": signal.get("url")
+                }]):
                     continue
 
                 is_high_risk = (
@@ -307,13 +436,14 @@ def run(run_id: UUID):
                     None
                 )
 
+                reported_date = signal.get('published_date') or datetime.now().date().isoformat()
                 record_data = {
                     'drug_name': drug_name,
                     'type': 'NEWS_INFERRED',
                     'source': signal.get('source', 'Web Search'),
                     'impact_severity': signal.get('supply_chain_impact'),
                     'description': f"{signal.get('headline')} - {signal.get('reasoning')}",
-                    'reported_date': datetime.now().date().isoformat(),
+                    'reported_date': reported_date,
                     'resolved': False,
                     'source_url': signal.get('url')
                 }

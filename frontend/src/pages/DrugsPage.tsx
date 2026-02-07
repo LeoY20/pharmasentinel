@@ -39,16 +39,36 @@ export default function DrugsPage() {
       const suppliers = suppliersRes.data || []
 
       // Map related data to each drug
-      const drugsWithRelations: DrugWithRelations[] = drugsData.map((drug: Drug) => ({
-        ...drug,
-        substitutes: substitutes.filter((s: Substitute) => s.drug_name === drug.name),
-        shortages: shortages.filter((s: Shortage) => {
-          const drugKey = normalizeName(drug.name)
+      const drugsWithRelations: DrugWithRelations[] = drugsData.map((drug: Drug) => {
+        const drugKey = normalizeName(drug.name)
+        const dedupedShortages: Shortage[] = []
+        const seen = new Set<string>()
+        for (const s of shortages) {
           const shortageKey = normalizeName(s.drug_name)
-          return drugKey !== '' && shortageKey !== '' && (shortageKey.includes(drugKey) || drugKey.includes(shortageKey))
-        }),
-        suppliers: suppliers.filter((s: Supplier) => s.drug_name === drug.name)
-      }))
+          if (!drugKey || !shortageKey) continue
+          if (!shortageKey.includes(drugKey) && !drugKey.includes(shortageKey)) continue
+          const src = (s.source || '').toLowerCase()
+          const url = (s.source_url || '').toLowerCase()
+          const nonUs = ['india', 'china', 'uk', 'europe', 'australia', 'canada', 'germany', 'france', 'spain', 'italy', 'brazil', 'mexico', 'japan']
+          const isForeign = nonUs.some(k => src.includes(k) || url.includes(k))
+          if (isForeign) continue
+          const uniq = [
+            normalizeName(s.description || ''),
+            s.source_url || '',
+            s.reported_date || '',
+            s.impact_severity || ''
+          ].join('|')
+          if (seen.has(uniq)) continue
+          seen.add(uniq)
+          dedupedShortages.push(s)
+        }
+        return {
+          ...drug,
+          substitutes: substitutes.filter((s: Substitute) => s.drug_name === drug.name),
+          shortages: dedupedShortages,
+          suppliers: suppliers.filter((s: Supplier) => s.drug_name === drug.name)
+        }
+      })
 
       setDrugs(drugsWithRelations)
     }
