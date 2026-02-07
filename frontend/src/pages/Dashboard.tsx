@@ -274,7 +274,7 @@ export default function Dashboard() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Drug</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Daily Usage</th>
@@ -308,8 +308,8 @@ export default function Dashboard() {
                         setEditingId(drug.id);
                         setEditValue(drug.stock_quantity.toString());
                       }}>
-                        <span>{formatNumber(drug.stock_quantity)} {drug.unit}</span>
                         <Pencil size={14} className="text-gray-400 opacity-0 group-hover:opacity-100" />
+                        <span>{formatNumber(drug.stock_quantity)} {drug.unit}</span>
                       </div>
                     )}
                   </td>
