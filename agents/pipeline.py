@@ -209,7 +209,87 @@ def run_pipeline() -> Dict[str, Any]:
 
         raise
 
+
+def run_quick_pipeline() -> Dict[str, Any]:
+    """
+    Lightweight pipeline for manual stock updates via frontend.
+    
+    Frontend calculates burn_rate instantly, backend:
+    - Runs Agent 0 in quick mode (reads burn_rate from DB, no LLM)
+    - Runs Overseer to update alerts based on new burn rates
+    
+    ~10s execution vs ~40s for full pipeline.
+    
+    Returns:
+        Pipeline execution summary
+    """
+    run_id = uuid.uuid4()
+    start_time = datetime.now()
+
+    print("\n" + "="*80)
+    print(f"QUICK UPDATE PIPELINE (Agent 0 Quick Mode + Overseer)")
+    print(f"Run ID: {run_id}")
+    print(f"Started: {start_time.isoformat()}")
+    print("="*80 + "\n")
+
+    results = {
+        "run_id": str(run_id),
+        "start_time": start_time.isoformat(),
+        "status": "success_quick",
+        "errors": []
+    }
+
+    try:
+        # Run Agent 0 in quick mode (no LLM, reads frontend-calculated burn_rate)
+        print("="*80)
+        print("PHASE 1: Inventory Analysis (Agent 0 - Quick Mode)")
+        print("="*80 + "\n")
+        
+        phase1_start = datetime.now()
+        agent_0_inventory.run(run_id, quick_mode=True)
+        phase1_duration = (datetime.now() - phase1_start).total_seconds()
+        
+        print(f"\n✓ Agent 0 (quick mode) completed in {phase1_duration:.2f}s\n")
+
+        # Run Overseer (update alerts based on new burn rates)
+        print("="*80)
+        print("PHASE 2: Alert Management (Overseer)")
+        print("="*80 + "\n")
+        
+        phase2_start = datetime.now()
+        overseer_result = overseer.run(run_id)
+        phase2_duration = (datetime.now() - phase2_start).total_seconds()
+        
+        print(f"\n✓ Overseer completed in {phase2_duration:.2f}s\n")
+
+        # Calculate total
+        total_duration = (datetime.now() - start_time).total_seconds()
+        
+        print("="*80)
+        print("QUICK PIPELINE COMPLETE")
+        print(f"Status: success")
+        print(f"Total Duration: {total_duration:.2f}s")
+        print("="*80 + "\n")
+
+        results["total_duration"] = total_duration
+        return results
+
+    except Exception as e:
+        total_duration = (datetime.now() - start_time).total_seconds()
+        results["status"] = "failed"
+        results["errors"].append(str(e))
+
+        print("\n" + "="*80)
+        print("QUICK PIPELINE FAILED")
+        print(f"Error: {e}")
+        print(f"Duration: {total_duration:.2f}s")
+        print("="*80 + "\n")
+
+        raise
+
+
 def run_phase_1_parallel(run_id: UUID) -> Dict[str, Any]:
+
     """
     Run Phase 1 agents (0, 1, 2) in parallel using asyncio.
     """

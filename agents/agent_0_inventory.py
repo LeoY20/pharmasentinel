@@ -122,6 +122,8 @@ def normalize_analysis(analysis: dict, inventory: list) -> dict:
         item["predicted_daily_usage_rate"] = predicted_usage
         item["burn_rate_days"] = round(burn_rate, 1) if burn_rate is not None else None
         item["predicted_burn_rate_days"] = round(predicted_burn, 1) if predicted_burn is not None else None
+        
+        print(f"  [{name}] Stock: {stock}, Usage: {usage} -> Burn Rate: {item['burn_rate_days']} days")
 
     return analysis
 
@@ -159,26 +161,69 @@ def upsert_predictions(analysis: dict, inventory: list):
         print("  Database updates complete.")
 
 
-def run(run_id: UUID):
-    print(f"\n{'='*60}")
-    print(f"Agent 0: Inventory Analyzer  |  run_id: {run_id}")
-    print(f"{'='*60}")
+def run(run_id: UUID, quick_mode: bool = False):
+    print(f"\n{'='*60}", flush=True)
+    mode_label = "(Quick Mode - No LLM)" if quick_mode else ""
+    print(f"Agent 0: Inventory Analyzer {mode_label} |  run_id: {run_id}", flush=True)
+    print(f"{'='*60}\n", flush=True)
 
     try:
         inventory = get_drugs_inventory() or []
         schedule = get_surgery_schedule(days_ahead=30) or []
         print(f"  {len(inventory)} inventory records, {len(schedule)} scheduled surgeries.")
 
-        analysis = analyze_with_llm(inventory, schedule)
-        if analysis:
-            analysis = normalize_analysis(analysis, inventory)
-            print("  LLM analysis complete.")
-            upsert_predictions(analysis, inventory)
-            log_agent_output(AGENT_NAME, run_id, analysis, analysis.get("summary", "Done."))
+        if quick_mode:
+            # Quick mode: Frontend already calculated burn_rate
+            # Just format the existing data for logging
+            analysis = {
+                "drug_analysis": [],
+                "schedule_impact": [],
+                "summary": "Quick mode - using burn rates calculated by frontend"
+            }
+            
+            for inv in inventory:
+                stock = float(inv.get("stock_quantity") or 0)
+                usage = float(inv.get("usage_rate_daily") or 0)
+                burn_rate = inv.get("burn_rate_days")  # Already calculated by frontend
+                
+                # Determine risk based on burn_rate
+                if burn_rate is not None and burn_rate < 7:
+                    risk = "CRITICAL"
+                elif burn_rate is not None and burn_rate < 14:
+                    risk = "HIGH"
+                elif burn_rate is not None and burn_rate < 30:
+                    risk = "MEDIUM"
+                else:
+                    risk = "LOW"
+                
+                analysis["drug_analysis"].append({
+                    "drug_name": inv["name"],
+                    "current_stock": stock,
+                    "daily_usage_rate": usage,
+                    "predicted_daily_usage_rate": usage,
+                    "burn_rate_days": burn_rate,
+                    "predicted_burn_rate_days": burn_rate,
+                    "trend": "STABLE",
+                    "risk_level": risk,
+                    "notes": "Frontend-calculated burn rate"
+                })
+                
+                print(f"  [{inv['name']}] Stock: {stock}, Usage: {usage} -> Burn Rate: {burn_rate} days (Risk: {risk})")
+            
+            print(f"  Quick mode analysis complete (no DB update needed).")
+            log_agent_output(AGENT_NAME, run_id, analysis, analysis["summary"])
         else:
-            summary = "LLM unavailable - no inventory updates performed."
-            print(f"  {summary}")
-            log_agent_output(AGENT_NAME, run_id, {"summary": summary}, summary)
+            # Normal mode: Use LLM for analysis
+            analysis = analyze_with_llm(inventory, schedule)
+            if analysis:
+                analysis = normalize_analysis(analysis, inventory)
+                print("  LLM analysis complete.")
+                upsert_predictions(analysis, inventory)
+                log_agent_output(AGENT_NAME, run_id, analysis, analysis.get("summary", "Done."))
+            else:
+                summary = "LLM unavailable - no inventory updates performed."
+                print(f"  {summary}")
+                log_agent_output(AGENT_NAME, run_id, {"summary": summary}, summary)
 
     except Exception as e:
         msg = f"Agent 0 failed: {e}"
