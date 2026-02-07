@@ -10,6 +10,24 @@ export default function Dashboard() {
   const [shortages, setShortages] = useState<Shortage[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Severity weights for sorting
+  const severityWeight = {
+    CRITICAL: 4,
+    URGENT: 3,
+    WARNING: 2,
+    INFO: 1,
+  }
+
+  function sortAlerts(alertsList: Alert[]): Alert[] {
+    return [...alertsList].sort((a, b) => {
+      const weightA = severityWeight[a.severity] || 0
+      const weightB = severityWeight[b.severity] || 0
+      // Sort by severity (descending), then by date (descending)
+      if (weightA !== weightB) return weightB - weightA
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+  }
+
   useEffect(() => {
     fetchData()
 
@@ -17,7 +35,7 @@ export default function Dashboard() {
     const alertsChannel = supabase
       .channel('alerts-channel')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alerts' }, (payload: { new: Alert }) => {
-        setAlerts((prev) => [payload.new as Alert, ...prev])
+        setAlerts((prev) => sortAlerts([payload.new as Alert, ...prev]))
       })
       .subscribe()
 
@@ -38,12 +56,12 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const [alertsRes, drugsRes, shortagesRes] = await Promise.all([
-        supabase.from('alerts').select('*').eq('acknowledged', false).order('created_at', { ascending: false }),
+        supabase.from('alerts').select('*').eq('acknowledged', false),
         supabase.from('drugs').select('*').order('criticality_rank'),
         supabase.from('shortages').select('*').eq('resolved', false),
       ])
 
-      if (alertsRes.data) setAlerts(alertsRes.data)
+      if (alertsRes.data) setAlerts(sortAlerts(alertsRes.data))
       if (drugsRes.data) setDrugs(drugsRes.data)
       if (shortagesRes.data) setShortages(shortagesRes.data)
     } catch (error) {
@@ -56,13 +74,25 @@ export default function Dashboard() {
   async function handleAcknowledge(alertId: string) {
     // Optimistically update UI
     setAlerts((prev) => prev.filter((a) => a.id !== alertId))
-    
+
     const { error } = await supabase.from('alerts').update({ acknowledged: true }).eq('id', alertId)
     if (error) {
       console.error("Failed to acknowledge alert:", error)
       // Revert UI if update fails
-      fetchData() 
+      fetchData()
     }
+  }
+
+  async function handleReorder(alert: Alert) {
+    console.log("Initiating reorder for", alert.drug_name);
+    // Logic to trigger reorder would go here
+    handleAcknowledge(alert.id);
+  }
+
+  async function handleSwapSuppliers(alert: Alert) {
+    console.log("Initiating supplier swap for", alert.drug_name);
+    // Logic to swap supplier would go here
+    handleAcknowledge(alert.id);
   }
 
   const criticalAlerts = alerts.filter((a) => a.severity === 'CRITICAL' && !a.acknowledged).length
@@ -77,7 +107,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
-      
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <SummaryCard title="Critical Alerts" value={criticalAlerts} icon={<ShieldAlert size={24} />} colorClass="bg-red-500" />
@@ -96,7 +126,13 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-3">
             {alerts.filter(a => !a.acknowledged).map((alert) => (
-              <AlertCard key={alert.id} alert={alert} onAcknowledge={handleAcknowledge} />
+              <AlertCard
+                key={alert.id}
+                alert={alert}
+                onAcknowledge={handleAcknowledge}
+                onReorder={handleReorder}
+                onSwapSuppliers={handleSwapSuppliers}
+              />
             ))}
           </div>
         )}
