@@ -74,8 +74,7 @@ PharmaSentinel monitors 10 critical hospital drugs (ranked by criticality 1-10) 
 - **Node.js 18+** and npm
 - **Supabase account** ([supabase.com](https://supabase.com))
 - **API Keys**:
-  - 3 Dedalus LLM API keys
-  - NewsAPI key ([newsapi.org](https://newsapi.org))
+  - At least 1 Dedalus API Key
 
 ### 1. Clone and Setup
 
@@ -113,9 +112,7 @@ DEDALUS_API_KEY_1=your_dedalus_key_1
 DEDALUS_API_KEY_2=your_dedalus_key_2
 DEDALUS_API_KEY_3=your_dedalus_key_3
 
-NEWS_API_KEY=your_newsapi_key
-
-HOSPITAL_LOCATION=Pittsburgh, PA
+HOSPITAL_LOCATION=your_location_here
 PIPELINE_INTERVAL_MINUTES=60
 ```
 
@@ -368,12 +365,6 @@ PHASE 1 COMPLETED in 12.45s
 - Check if you've hit rate limits (the system distributes keys to avoid this)
 - For development, the system will use fallback logic if LLM calls fail
 
-### "No articles found" (Agent 2)
-
-- Verify `NEWS_API_KEY` is valid and active
-- NewsAPI has rate limits on the free tier
-- Agent will continue with empty results if NewsAPI is unavailable
-
 ### Frontend shows "Loading..." forever
 
 - Check browser console for errors
@@ -394,7 +385,6 @@ Built for the **Insolvent Hackathon** using:
 - **Supabase** for database + realtime
 - **Dedalus** for LLM reasoning
 - **FDA openFDA API** for shortage data
-- **NewsAPI** for news monitoring
 - **React + TypeScript** for frontend
 - **Python** for backend agents
 
