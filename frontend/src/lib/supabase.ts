@@ -151,14 +151,161 @@ export interface Database {
 // Supabase Client
 // ============================================================================
 
+// ============================================================================
+// Supabase Client & Mock Implementation
+// ============================================================================
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables. Please check your .env file.')
+// Mock Data
+const MOCK_DRUGS: Drug[] = [
+  {
+    id: 'd1',
+    name: 'Epinephrine',
+    type: 'Anaphylaxis/Cardiac',
+    stock_quantity: 150,
+    unit: 'vials',
+    price_per_unit: 25.50,
+    primary_supplier_id: null,
+    usage_rate_daily: 5,
+    predicted_usage_rate: 5.2,
+    burn_rate_days: 30,
+    predicted_burn_rate_days: 28.8,
+    reorder_threshold_days: 14,
+    criticality_rank: 1,
+    last_restock_date: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'd2',
+    name: 'Propofol',
+    type: 'Anesthetic',
+    stock_quantity: 20,
+    unit: 'vials',
+    price_per_unit: 12.00,
+    primary_supplier_id: null,
+    usage_rate_daily: 10,
+    predicted_usage_rate: 12,
+    burn_rate_days: 2,
+    predicted_burn_rate_days: 1.6,
+    reorder_threshold_days: 14,
+    criticality_rank: 4,
+    last_restock_date: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'd3',
+    name: 'Oxygen',
+    type: 'Respiratory',
+    stock_quantity: 500,
+    unit: 'tanks',
+    price_per_unit: 45.00,
+    primary_supplier_id: null,
+    usage_rate_daily: 20,
+    predicted_usage_rate: 20,
+    burn_rate_days: 25,
+    predicted_burn_rate_days: 25,
+    reorder_threshold_days: 7,
+    criticality_rank: 2,
+    last_restock_date: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+]
+
+const MOCK_ALERTS: Alert[] = [
+  {
+    id: 'a1',
+    run_id: 'mock-run-1',
+    alert_type: 'RESTOCK_NOW',
+    severity: 'CRITICAL',
+    drug_id: 'd2',
+    drug_name: 'Propofol',
+    title: 'Critical Low Stock: Propofol',
+    description: 'Current stock will be depleted in < 48 hours based on predicted usage.',
+    action_payload: null,
+    acknowledged: false,
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'a2',
+    run_id: 'mock-run-1',
+    alert_type: 'SHORTAGE_WARNING',
+    severity: 'WARNING',
+    drug_id: 'd1',
+    drug_name: 'Epinephrine',
+    title: 'Potential Supply Chain Delay',
+    description: 'News reports indicate manufacturing delays at major supplier facilities.',
+    action_payload: null,
+    acknowledged: false,
+    created_at: new Date(Date.now() - 86400000).toISOString()
+  }
+]
+
+class MockSupabaseClient {
+  constructor() {
+    console.warn('⚠️ USING MOCK SUPABASE CLIENT ⚠️')
+  }
+
+  from(table: string) {
+    return {
+      select: () => this.createBuilder(table),
+      update: (data: any) => this.createBuilder(table, 'update', data),
+      insert: (data: any) => this.createBuilder(table, 'insert', data),
+      upsert: (data: any) => this.createBuilder(table, 'upsert', data),
+      delete: () => this.createBuilder(table, 'delete'),
+    }
+  }
+
+  channel(name: string) {
+    const mockChannel = {
+      on: (event: any, filter: any, callback: any) => {
+        return mockChannel
+      },
+      subscribe: (callback?: (status: string, err?: Error) => void) => {
+        if (callback) callback('SUBSCRIBED')
+        return mockChannel
+      },
+      unsubscribe: () => { }
+    }
+    return mockChannel
+  }
+
+  private createBuilder(table: string, op?: string, data?: any) {
+    const builder = {
+      eq: () => builder,
+      order: () => builder,
+      limit: () => builder,
+      single: () => builder,
+      then: (resolve: (res: any) => void) => {
+        let resultData: any = []
+        if (table === 'drugs') resultData = [...MOCK_DRUGS]
+        else if (table === 'alerts') resultData = [...MOCK_ALERTS]
+        else if (table === 'shortages') resultData = []
+        else if (table === 'suppliers') resultData = []
+
+        // Simulate async
+        setTimeout(() => {
+          resolve({ data: resultData, error: null })
+        }, 100)
+      }
+    }
+    return builder
+  }
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
+const shouldMock = !supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your_supabase_project_url')
+
+if (shouldMock) {
+  console.log('Supabase credentials missing or invalid. Initializing Mock Client.')
+}
+
+export const supabase = shouldMock
+  ? (new MockSupabaseClient() as any)
+  : createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 // ============================================================================
 // Helper Functions
